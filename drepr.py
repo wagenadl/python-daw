@@ -7,7 +7,7 @@ import numbers
 
 linelen = 70
 
-def ol_summary(pfx, ss, bo, bc, sfx=''):
+def ol_summary(pfx, ss, bo, bc, sfx='', N=None):
     use = []
     luse = 0
     for s in ss:
@@ -17,7 +17,9 @@ def ol_summary(pfx, ss, bo, bc, sfx=''):
         else:
             break
     if len(use) < len(ss):
-        use.append(f'... (+{len(ss)-len(use)})')
+        if N is None:
+            N = len(ss)
+        use.append(f'... (+{N-len(use)})')
     print(f'{pfx} {bo} {", ".join(use)} {bc} {sfx}')
 
 def ol_dict(pfx, x):
@@ -106,7 +108,50 @@ def d_other(name, x):
     ol_other(x)
 
 def d_nd_array(name, x):
-    ol_nd_array(name + ' =', x)
+    N = np.prod(x.shape)
+    shp = '[array, ' + '×'.join([str(v) for v in x.shape]) \
+          + ' ' + str(x.dtype) + ']'
+    print(f'{name} = {shp}:')
+    if N==0 or N==np.max(x.shape):
+        K = min(10, N)
+        if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
+            ol_summary('  ', [f'{v:.4g}' for v in x.flat[:K]], '[', ']', N=N)
+        else:            
+            ol_summary('  ', [str(v) for v in x.flat[:K]], '[', ']', N=N)
+    elif x.ndim==2:
+        N = min(10, x.shape[0])
+        M = min(7, x.shape[1])
+        for n in range(N):
+            res = '  ['
+            if x.dtype==np.float32 or x.dtype==np.float64:
+                for m in range(M):
+                    res += f' {x[n,m]:9.3g}'
+            elif x.dtype==np.complex:
+                M = min(4, M)
+                for m in range(M):
+                    res += f' {x[n,m]:16.3g}'
+            else:
+                for m in range(M):
+                    res += f' {x[n,m]}'
+            if M<x.shape[1]:
+                res += ' ...'
+            res += ' ]'
+            print(res)
+        if x.shape[0] > N:
+            res = '  ['
+            if x.dtype==np.float32 or x.dtype==np.float64:
+                for m in range(M):
+                    res += '       ...'
+            elif x.dtype==np.complex:
+                M = min(4, M)
+                for m in range(M):
+                    res += '              ...'
+            else:
+                res += ' ...'
+            if M<x.shape[1]:
+                res += ' ...'
+            res += ' ]'
+            print(res)
     
 def d(x):
     frame = inspect.currentframe()
