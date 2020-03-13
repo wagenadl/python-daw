@@ -7,7 +7,7 @@
 typedef uint64_t idx_t;
 typedef int64_t stride_t;
 
-template <class T> uint64_t *schmitt(T const *vec, idx_t count, stride_t stride,
+template <class T> idx_t *schmitt(T const *vec, idx_t count, stride_t stride,
 				     T upthr, T downthr, idx_t *nout) {
   int k = 0; // number of transitions found so far
   int res = 1024; // reserved space
@@ -36,13 +36,13 @@ extern "C" {
     delete [] trans;
   }
 
-  uint64_t *schmitt_double(double const *vec, idx_t count, stride_t stride,
-			   double upthr, double downthr, idx_t *nout) {
+  idx_t *schmitt_double(double const *vec, idx_t count, stride_t stride,
+                        double upthr, double downthr, idx_t *nout) {
     return schmitt<double>(vec, count, stride, upthr, downthr, nout);
   }
 
-  uint64_t *schmitt_float(float const *vec, idx_t count, stride_t stride,
-			   float upthr, float downthr, idx_t *nout) {
+  idx_t *schmitt_float(float const *vec, idx_t count, stride_t stride,
+                       float upthr, float downthr, idx_t *nout) {
     return schmitt<float>(vec, count, stride, upthr, downthr, nout);
   }
 };
