@@ -7,10 +7,9 @@ import time
 
 class SelectSpikes:
     '''SELECTSPIKES - Manually select spikes based on graphical threshold
-    ss = SELECTSPIKES(tms, hei) opens a GUI to manually select spikes
+    ss = SELECTSPIKES(tms, hei) creates a GUI to manually select spikes
     using a draggable threshold. 
     idx = ss.run() runs the GUI and reports the result
-    idx = ss.result() 
     This is a re-implementation of the Matlab/Octave version I wrote a 
     decade ago.'''
     def __init__(self, tms, hei):
@@ -229,7 +228,20 @@ However, the lines should not cross.''')
             self.tdots[k][idx] = t
             self.ydots[k][idx] = y
             self.updatedotsandlines(k)
-        
+
+def selectspikes(tms, hei, return_idx=False):
+    '''SELECTSPIKES - Run the SelectSpikes GUI
+    tms, hei = SELECTSPIKES(tms, hei) runs the GUI and returns times
+    and amplitudes of selected spikes.
+    idx = SELECTSPIKES(tms, hei, True) runs the GUI and returns the indices
+    of selected spikes instead.'''
+    ss = SelectSpikes(tms, hei)
+    idx = ss.run()
+    if return_idx:
+        return idx
+    else:
+        return tms, hei
+            
 if __name__ == '__main__':
     import scipy.signal
     from ephysx import spikex
