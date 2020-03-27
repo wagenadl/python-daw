@@ -20,153 +20,16 @@ import re
 from collections import OrderedDict
 import numpy as np
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#% Prepare unit database
-unitcode = { 'm': 2, 's': 3, 'g': 5, 'A': 7, 'mol': 11 }
+class Units:
+    '''UNITS - Class for unit conversion
 
-def mkprefix():
-    prefix = OrderedDict({ 'd': -1, 'c': -2,
-                           'm': -3, 'u': -6, 'n': '-9', 'p': -12, 'f': -15,
-                           'k': 3, 'M': 6, 'G': 9, 'T': 12 })
-    altprefix = [ 'deci=d',
-                  'centi=c',
-                  'milli=m',
-                  'micro=μ=u',
-                  'nano=n',
-    	      'pico=p',
-    	      'femto=f',
-    	      'kilo=k',
-    	      'mega=Mega=M',
-    	      'giga=Giga=G',
-    	      'tera=Tera=T' ]
-    for ap in altprefix:
-        bits = ap.split('=')
-        val = bits.pop()
-        for b in bits:
-            prefix[b] = prefix[val]
-    return prefix
-
-prefix = mkprefix()
-
-def mkunitmap():
-    altunits = [ 'meter=meters=m', 
-                 'second=seconds=sec=secs=s', 
-    	         'gram=grams=gm=g',
-                 'lb=pound=453.59237 g',
-    	         'amp=amps=ampere=amperes=Amp=Ampere=Amperes=A',
-                 'min=minute=60 s',
-                 'h=hour=60 min',
-                 'day=24 hour',
-    	         'in=inch=2.54 cm',
-    	         'l=L=liter=liters=1e-3 m^3',
-    	         'Hz=Hertz=hertz=cyc=cycles=s^-1',
-    	         'C=Coulomb=coulomb=Coulombs=coulombs=A s',
-    	         'N=newton=Newton=newtons=Newtons=kg m s^-2',
-                 'lbf=4.4482216 kg m / s^2',
-    	         'J=joule=joules=Joule=Joules=N m',
-    	         'W=watt=Watt=watts=Watts=J s^-1'
-    	         'V=Volt=volt=Volts=volts=W A^-1',
-    	         'Pa=pascal=Pascal=N m^-2',
-    	         'bar=1e5 Pa',
-    	         'atm=101325 Pa',
-    	         'torr=133.32239 Pa',
-                 'psi=6894.7573 kg / m s^2',
-    	         'Ohm=Ohms=ohm=ohms=V A-1',
-    	         'mho=Mho=Ohm^-1',
-    	         'barn=1e-28 m^2',
-    	         'M=molar=mol l^-1',
-    ]
-    unitmap = {}
-    for au in altunits:
-        bits = au.split('=')
-        val = bits.pop()
-        for b in bits:
-            unitmap[b] = val
-    return unitmap
-
-unitmap = mkunitmap()
-            
-def fracdecode(s):
-    #return [mul,code]
-    idx = s.find('/')
-    if idx<0:
-        numer = s
-        denom = ''
-    else:
-        numer = s[:idx]
-        denom = s[idx+1:].replace('/', ' ')
-
-    multis = [ numer, denom ]
-    mul = []
-    code = []
-    for q in range(2):
-        mul.append(1)
-        code.append(1)
-        factors = multis[q].split(' ')
-        for fac in factors:
-            mu, co = factordecode(fac)
-            mul[q] *= mu
-            code[q] *= co
-    mul = mul[0]/mul[1]
-    code = code[0]/code[1]
-    return mul, code
-
-numre = re.compile('^[-0-9+.]')
-def factordecode(fac):
-    if numre.search(fac):
-        # It's a number
-        return float(fac), 1
-
-    idx = fac.find('^')
-    if idx>=0:
-        base = fac[:idx]
-        powfrac = fac[idx+1:]
-        if powfrac.find('^')>0:
-            raise ValueError('Double exponentiation')
-        idx = powfrac.find('|')
-        if idx>=0:
-            pw = float(powfrac[:idx]) / float(powfrac[idx+1:])
-        else:
-            pw = float(powfrac)
-    else:
-        base=fac
-        pw = 1
-
-    # Let's decode the UNIT
-    if base=='':
-        return 1,1
-    elif base in unitcode:
-        # It's a base unit without a prefix
-        mu = 1
-        co = unitcode[base]**pw
-        return mu, co
-    elif base in unitmap:
-        mu, co = fracdecode(unitmap[base])
-        mu = mu**pw
-        co = co**pw
-        return mu, co
-    else:
-        # So we must have a prefix
-        for pf in reversed(prefix):
-            if base.startswith(pf):
-                L = len(pf)
-                mu, co = fracdecode(base[L:])
-                mu *= 10**prefix[pf]
-                mu = mu**pw
-                co = co**pw
-                return mu, co
-    raise ValueError(f'I do not know any unit named “{fac}”')
-        
-def convert(newunit, value, unit=None, warn=False):
-    '''CONVERT - Unit conversion
-    newval = CONVERT(newunit, value, unit) converts a VALUE expressed in 
-    some UNIT to NEWUNIT.
-    For instance, CONVERT('cm', 2, 'inch') returns 5.08.
-    As a convenience, CONVERT('cm', '2 inch') also works.
+    Examples: Units('4 lbs').asunit('kg') -> 1.814
+              Units('3 V / 200 mA').asunit('Ohm') -> 15.0
+              Units('psi').definition() -> '6894.7573 kg m^-1 s^-2'
 
     The full syntax for unit specification is like this:
- 
-    BASEUNIT = m | s | g | A
+
+    BASEUNIT = m | s | g | A | mol
     PREFIX = m | u | n | p | f | k | M | G | T
     ALTUNIT = meter | meters | second | seconds | sec | secs |
               gram | grams | gm | amp | amps | ampere | amperes | 
@@ -189,50 +52,231 @@ def convert(newunit, value, unit=None, warn=False):
     FACTOR = POWERED | NUMBER
     MULTI = FACTOR (' ' MULTI)?
     FRACTION = MULTI ('/' MULTI)?
- 
+
     Thus, the following would be understood:
- 
+
       'kg m / s^2' - That's a newton
       'J / Hz^1|2' - Joules per root-Hertz
- 
+
     NOTES:
 
     - Multiplication is implicit; do not attempt to write '*'.
     - Fractions in exponents are written with '|' rather than '/'. '|' binds
       more tightly than '^'. 
     - Division marked by '/' binds most loosely, e.g,
- 
+
        'kg / m s' - kilogram per meter per second
- 
-    - Errors are generated if NEWUNIT and UNIT are incompatible or
-      if either UNIT or NEWUNIT cannot be parsed. That this can happen 
-      if CONVERT doesn't know your perfectly reasonable unit names.
-      (In that case, please improve the database.)
-    - Passing optional argument WARN=True suppresses errors on unit mismatch.
-      Be careful when doing that!
-    - CONVERT does not support addition or subtraction at all.
-    
-    CAUTION:
 
     - Syntax checking is not overly rigorous. Some invalid expressions may
       return meaningless values without a reported error.'''
-    
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    #% Check arguments
-    if unit is None:
-        unit = value
-        value = 1
+    #% Prepare unit database
+    def mkunitcode():
+        units = 'mol A g m s'.split(' ')
+        uc = {}
+        U = len(units)
+        for u in range(U):
+            vec = np.zeros(U)
+            vec[u] = 1
+            uc[units[u]] = vec
+        uc[1] = np.zeros(U)
+        return uc, units
+        
+    unitcode, unitvec = mkunitcode()
+    def decodeunit(u):
+        return Units.unitcode[u].copy()
 
-    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    oldmul, oldcode = fracdecode(unit)
-    newmul, newcode = fracdecode(newunit)
-    if oldcode != newcode:
-        if warn:
-            print(f'WARNING: Units {newunit} do not match {unit}')
+    def mkprefix():
+        prefix = OrderedDict({ 'd': -1, 'c': -2,
+                               'm': -3, 'u': -6, 'n': '-9', 'p': -12, 'f': -15,
+                               'k': 3, 'M': 6, 'G': 9, 'T': 12 })
+        altprefix = [ 'deci=d',
+                      'centi=c',
+                      'milli=m',
+                      'micro=μ=u',
+                      'nano=n',
+                      'pico=p',
+                      'femto=f',
+                      'kilo=k',
+                      'mega=Mega=M',
+                      'giga=Giga=G',
+                      'tera=Tera=T' ]
+        for ap in altprefix:
+            bits = ap.split('=')
+            val = bits.pop()
+            for b in bits:
+                prefix[b] = prefix[val]
+        return prefix
+
+    prefix = mkprefix()
+
+    def mkunitmap():
+        altunits = [ 'meter=meters=m', 
+                     'second=seconds=sec=secs=s', 
+                     'gram=grams=gm=g',
+                     'lb=lbs=pound=453.59237 g',
+                     'amp=amps=ampere=amperes=Amp=Ampere=Amperes=A',
+                     'min=minute=60 s',
+                     'h=hour=60 min',
+                     'day=24 hour',
+                     'in=inch=2.54 cm',
+                     'l=L=liter=liters=1e-3 m^3',
+                     'Hz=Hertz=hertz=cyc=cycles=s^-1',
+                     'C=Coulomb=coulomb=Coulombs=coulombs=A s',
+                     'N=newton=Newton=newtons=Newtons=kg m s^-2',
+                     'lbf=4.4482216 kg m / s^2',
+                     'J=joule=joules=Joule=Joules=N m',
+                     'W=watt=Watt=watts=Watts=J s^-1',
+                     'V=Volt=volt=Volts=volts=W A^-1',
+                     'Pa=pascal=Pascal=N m^-2',
+                     'bar=1e5 Pa',
+                     'atm=101325 Pa',
+                     'torr=133.32239 Pa',
+                     'psi=6894.7573 kg / m s^2',
+                     'Ohm=Ohms=ohm=ohms=V A^-1',
+                     'mho=Mho=Ohm^-1',
+                     'barn=1e-28 m^2',
+                     'M=molar=mol l^-1',
+        ]
+        unitmap = {}
+        for au in altunits:
+            bits = au.split('=')
+            val = bits.pop()
+            for b in bits:
+                unitmap[b] = val
+        return unitmap
+
+    unitmap = mkunitmap()
+
+    def fracdecode(s):
+        #return [mul,code]
+        idx = s.find('/')
+        if idx<0:
+            numer = s
+            denom = ''
         else:
-            raise ValueError(f'Units {newunit} do not match {unit}')
-    return value * oldmul / newmul
+            numer = s[:idx]
+            denom = s[idx+1:].replace('/', ' ')
 
+        multis = [ numer, denom ]
+        mul = []
+        code = []
+        for q in range(2):
+            mul.append(1)
+            code.append(Units.decodeunit(1))
+            factors = multis[q].split(' ')
+            for fac in factors:
+                mu, co = Units.factordecode(fac)
+                mul[q] *= mu
+                code[q] += co
+        mul = mul[0]/mul[1]
+        code = code[0] - code[1]
+        return mul, code
+
+    numre = re.compile('^[-0-9+.]')
+    def factordecode(fac):
+        if Units.numre.search(fac):
+            # It's a number
+            return float(fac), Units.decodeunit(1)
+
+        idx = fac.find('^')
+        if idx>=0:
+            base = fac[:idx]
+            powfrac = fac[idx+1:]
+            if powfrac.find('^')>0:
+                raise ValueError('Double exponentiation')
+            idx = powfrac.find('|')
+            if idx>=0:
+                pw = float(powfrac[:idx]) / float(powfrac[idx+1:])
+            else:
+                pw = float(powfrac)
+        else:
+            base=fac
+            pw = 1
+
+        # Let's decode the UNIT
+        if base=='':
+            return 1., Units.decodeunit(1)
+        elif base in Units.unitcode:
+            # It's a base unit without a prefix
+            mu = 1
+            co = Units.decodeunit(base)*pw
+            return mu, co
+        elif base in Units.unitmap:
+            mu, co = Units.fracdecode(Units.unitmap[base])
+            mu = mu**pw
+            co = co*pw
+            return mu, co
+        else:
+            # So we must have a prefix
+            for pf in reversed(Units.prefix):
+                if base.startswith(pf):
+                    L = len(pf)
+                    mu, co = Units.fracdecode(base[L:])
+                    mu *= 10**Units.prefix[pf]
+                    mu = mu**pw
+                    co = co*pw
+                    return mu, co
+        raise ValueError(f'I do not know any unit named “{fac}”')
+
+    def __init__(self, value, unit=None):
+        '''Constructor - Store a value with associated units
+        UNITS(value, units), where VALUE is a number and UNITS a string,
+        stores the given quantity. For instance, UNITS(9.81, 'm / s^2').
+        For convenience, UNITS('9.81 m/s^2') also works.'''
+        if unit is None:
+            unit = value
+            value = 1
+        self.value = value
+        self.oldmul, self.oldcode = Units.fracdecode(unit)
+
+    def definition(self):
+        '''DEFINITION - Definition of stored value in SI units
+        DEFINITION() returns the definition of the stored unit in terms
+        of SI base units.'''
+        val = self.value * self.oldmul
+        ss = []
+        for u in range(len(Units.unitvec)):
+            co = self.oldcode[u]
+            un = Units.unitvec[u]
+            if un=='g':
+                val /= 1000**co
+                un = 'kg'
+            if co==0:
+                pass
+            elif co==1:
+                ss.append(un)
+            elif co==int(self.oldcode[u]):
+                ss.append(f'{un}^{int(co)}')
+            else:
+                ss.append(f'{un}^{self.oldcode[u]}')
+        ss.insert(0, f'{val}')
+        return ' '.join(ss)
+                
+    def asunits(self, newunit, warn=False):
+        '''ASUNITS - Convert to different units
+        ASUNITS(newunits) converts the stored quantity to the given new
+        units. An exception is raised if the units are incompatible.
+        Optional argument WARN, if True, turns that into a warning.
+        See the class documentation for unit syntax and note that
+        addition or subtraction is not supported.'''
+        newmul, newcode = Units.fracdecode(newunit)
+        if np.any(self.oldcode != newcode):
+            if warn:
+                print(f'WARNING: Units {newunit} do not match {unit}')
+            else:
+                raise ValueError(f'Units {newunit} do not match {unit}')
+        return self.value * self.oldmul / newmul
+        
+def convert(newunit, value, unit=None, warn=False):
+    '''CONVERT - Unit conversion
+    newval = CONVERT(newunit, value, unit) converts a VALUE expressed in 
+    some UNIT to NEWUNIT using the UNITS class. It is simply a convenience
+    function for UNITS(value, unit).asunits(newunit).
+    For instance, CONVERT('cm', 2, 'inch') returns 5.08.
+    As a convenience, CONVERT('cm', '2 inch') also works.'''
+
+    return Units(value, unit).asunit(newunit, warn)
 
 def candela2lumen(x_cd, twothetahalf_deg):
     '''CANDELA2LUMEN - Convert candelas to lumens for a given beam width
@@ -393,3 +437,12 @@ def candela2watt(br_cd, diam_deg, wavelength_nm=555):
     eff = np.interp(wavelength_nm, _vl1924e[:,0], _vl1924e[:,1])
     P_W = br_intg_lumen / eff / 683
     return P_W
+
+if __name__=='__main__':
+    u = Units('V')
+    print(u.definition())
+    u = Units('psi')
+    print(u.definition())
+    u = Units('4 lbs')
+    print(u.asunit('kg'))
+    

@@ -31,6 +31,7 @@
 # unshape is subsumed in the new semiflatten
 
 import datetime
+import numpy as np
 
 # Sieve of Eratosthenes
 # Code by David Eppstein, UC Irvine, 28 Feb 2002
@@ -162,7 +163,7 @@ def datesub(ymd1, ymd2):
     '''DATESUB  Subtract two dates in YYMMDD form to get number of days.
     days = DATESUB(yymmdd1, yymmdd2) subtracts YYMMDD2 from YYMMDD1 and
     returns the result expressed as an integer number of days.'''
-   if len(ymd1)!=6:
+    if len(ymd1)!=6:
         return ValueError('YMD1 must be 6 digits')
     if len(ymd2)!=6:
         return ValueError('YMD2 must be 6 digits')
@@ -183,7 +184,7 @@ def timeadd(hhmmss, seconds):
     as another HHMMSS-formatted string. DAYS may be negative.'''
     if len(hhmmss)==4:
         hhmmss += '00'
-    if len(hhmmss)!=6 
+    if len(hhmmss)!=6:
         return ValueError('HHMMSS must be 4 or 6 digits')
     yy = int(hhmmss[:2])
     mm = int(hhmmss[2:4])
@@ -326,7 +327,7 @@ def isnvector(x):
     '''ISNVECTOR - True if array is a numeric vector
     ISNVECTOR(x) returns True if X is a scalar, or a numpy array that
     (1) contains numbers and (2) has at most one non-singleton dimension.'''
-   try:
+    try:
         y = np.array(x)
         if len(y)==0:
             return True
