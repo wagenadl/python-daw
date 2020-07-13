@@ -1,1 +1,1 @@
-from physfit import *
+from .physfit import *

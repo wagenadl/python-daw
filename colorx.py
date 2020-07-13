@@ -21,26 +21,44 @@ def reshape(cc, S):
     '''Reverses the operation of UNSHAPE'''
     return np.reshape(cc,S)
 
+def clipxyz(cc, clip):
+    '''CLIPXYZ - Clip XYZ colors (helper for CIELUVTOCIEXYZ and friends)'''
+
+    if clip==0:
+        pass
+    elif clip==1:
+        cc = np.maximum(cc, 0)
+        cc = np.minimum(cc, 1)
+    elif np.isnan(clip):
+        nn = np.any(np.logical_or(cc<0, cc>1), 1)
+        cc[nn, :] = np.nan
+    elif clip==2:
+        cc = np.maximum(cc, 0)
+        mx = np.max(cc, 1)
+        mx = np.maximum(mx, 1)
+        cc = cc / np.reshape(mx, (len(mx), 1))
+    return cc
+
 def cliprgb(cc, clip):
     '''CLIPRGB - Clip linear RGB colors (helper for ciexyztolinearrgb)
     Operates in place.'''
 
     if clip==0:
         pass
-    if clip==1:
-        cc[cc<0] = 0
-        cc[cc>1] = 1
+    elif clip==1:
+        cc = np.maximum(cc, 0)
+        cc = np.minimum(cc, 1)
     elif np.isnan(clip):
         nn = np.any(np.logical_or(cc<0, cc>1), 1)
         cc[nn, :] = np.nan
     elif clip==2:
-        cc[cc<0] = 0
+        cc = np.maximum(cc, 0)
         mx = np.max(cc, 1)
-        mx[mx<1] = 1
-        cc = cc / np.repeat(mx, 3, 1)
+        mx = np.maximum(mx, 1)
+        cc = cc / np.reshape(mx, (mx.shape[0], 1))
     else:
-        raise Exception('Illegal clip specification')
-
+        raise Exception(f'Illegal clip specification: {clip}')
+    return cc
 
 
 def cielchtocielab(cc):
@@ -88,11 +106,14 @@ def linearrgbtosrgb(cc):
     be AxBx...x3 and have values in the range [0, 1].'''
     # The conversion here is based on http://en.wikipedia.org/wiki/SRGB
 
-    big = cc>.0031308;
+    isn = np.isnan(cc)
+    cc[isn] = 0
+    big = cc>.0031308
     sml = np.logical_not(big)
     cc = cc.copy()
     cc[big] = 1.055*cc[big]**(1/2.4) - .055
     cc[sml] = cc[sml]*12.92
+    cc[isn] = np.nan
     return cc
 
 def linearrgbtohcl(cc, gamma=10):
@@ -213,13 +234,21 @@ def linearrgbtociexyz(cc):
     The conversion here is based on http://en.wikipedia.org/wiki/SRGB'''
 
     (cc, S) = unshape(cc)
-    return reshape(np.matmul(cc, rgbxyz_), S)
+    print(cc.shape, rgbxyz_.shape)
+    cc1 = np.matmul(cc, rgbxyz_)
+    return reshape(cc1, S)
 
 whitepoints = { 'd50': np.array([0.9642,    1.0000,    0.8251]),
-                'd55': np.array([0.9568,    1.0000,    0.9214]),
-                'd65': np.array([0.9504,    1.0000,    1.0889]),
-                'a':   np.array([1.0985,    1.0000,    0.3558]),
-                'c':   np.array([0.9807,    1.0000,    1.1823]) }
+                 'd55': np.array([0.9568,    1.0000,    0.9214]),
+                 'd65': np.array([0.9504,    1.0000,    1.0889]),
+                 'a':   np.array([1.0985,    1.0000,    0.3558]),
+                 'c':   np.array([0.9807,    1.0000,    1.1823]) }
+def whitepoint(wh='d65'):
+    '''WHITEPOINT - Return XYZ values of standard white points
+    xyz = WHITEPOINT(s) returns XYZ values of one of several standard
+    white points: d50, d55, d65, a, c'''
+    # Source: Matlab R2012b's whitepoint function
+    return whitepoints[wh]
 
 def cielabtociexyz(cc, whitepoint='d65', clip=0):
     '''CIELABTOCIEXYZ - Convert CIE L*a*b* colors to CIE XYZ
@@ -290,6 +319,51 @@ def cielabtocielch(cc):
     cc[:,2] = h
     return reshape(cc, S)
 
+def cieluvtociexyz(cc, whitepoint='d65', clip=0):
+    '''CIELUVTOCIEXYZ - Convert from CIE L*u*v to CIE XYZ color space
+    cc = CIELUVTOCIEXYZ(cc) converts from CIE L*u*v to CIE XYZ color space.
+    CC must be AxBx...x3 and have values in the range [0, 1].
+    
+    Note: L*u*v* colors have unusual bounds: L* ranges from 0 to 100;
+    u* and b* "typicallay" between -100 and +100.
+    
+    By default, the D65 white point is used. (See WHITEPOINTS.)
+    This can be overridden: cc = CIEXYZTOCIELUV(cc, whitepoint). The 
+    white point may be given as an XYZ triplet or as one of several standard
+    names: d50, d55, d65, a, or c.
+    
+    This function can potentially lead to out-of-range XYZ values. By default,
+    these are left unclipped. cc = CIELUVTOCIEXYZ(..., clip) changes this
+    behavior:
+      CLIP=0: no clipping (default)
+      CLIP=1: hard clipping to [0, 1]
+      CLIP=nan: set out of range values to NaN.
+      CLIP=2: hard clip at black, proportional clip at white.'''
+
+    # Equations taken from http://en.wikipedia.org/wiki/CIELUV
+
+    if type(whitepoint)==str:
+        whitepoint = whitepoints[whitepoint]
+
+    cc, S = unshape(cc)
+
+    nom = whitepoint[0] + 15*whitepoint[1] + 3*whitepoint[2]
+    upn = 4*whitepoint[0] / nom
+    vpn = 9*whitepoint[1] / nom
+    up = cc[:,1] / (13*cc[:,0]+1e-9) + upn
+    vp = cc[:,2] / (13*cc[:,0]+1e-9) + vpn
+    big = cc[:,0] > 8
+    nbig = np.logical_not(big)
+    cc[big, 1] = whitepoint[1] * ((cc[big, 0]+16)/116)**3
+    cc[nbig, 1] = whitepoint[1] * cc[nbig, 0] * (3/29)**3
+    cc[:,0] = cc[:,1] * (9*up)/(4*vp)
+    cc[:,2] = cc[:,1] * (12 - 3*up - 20*vp) / (4*vp)
+
+    cc = clipxyz(cc, clip)
+    cc = reshape(cc, S)
+    return cc
+    
+
 def cieluvtolshuv(cc):
     '''CIELUVTOLSHUV - Convert CIE L*u*v* to L* s_uv h_uv colors
     cc = CIELUVTOLSHUV(cc) converts CIE L*u*v* to L* s_uv h_uv colors.
@@ -322,7 +396,7 @@ def ciexyztolinearrgb(cc, clip=1):
     
     cc = np.matmul(cc, M)
 
-    cliprgb(cc, clip)
+    cc = cliprgb(cc, clip)
     
     return reshape(cc, S)
 
@@ -393,8 +467,8 @@ def ciexyztocieluv(cc, whitepoint='d65'):
     nom = cc[:,0] + 15*cc[:,1] + 3*cc[:,2]
     up =  4*cc[:,0] / nom
     vp =  9*cc[:,1] / nom
-    big = (cc[:,1]/whitepoint[1]) > (6/29)^3
-    sml = no.logical_not(big)
+    big = (cc[:,1]/whitepoint[1]) > (6/29)**3
+    sml = np.logical_not(big)
     cc = cc.copy()
     cc[big, 0] = 116*(cc[big,1]/whitepoint[1])**(1/3.) - 16
     cc[sml, 0] = (29/3)*(cc[sml,1]/whitepoint[1])
@@ -505,7 +579,7 @@ def colorconvert(cc, fromspace, tospace, whitepoint='d65', clip=0):
         cc = ciexyztocielab(cc, whitepoint)
         fromspace = 'cielab'
     elif tospace=='cieluv':
-        cc = ciexyztocieluv(cc, kv.whitepoint)
+        cc = ciexyztocieluv(cc, whitepoint)
         fromspace = 'cieluv'
     elif tospace=='lms':
         cc = ciexyztolms(cc)
@@ -995,26 +1069,6 @@ def whitepointD(t):
     S = list(S)
     S.append(3)
     return np.reshape(xyz, S)
-
-def whitepoints(s):
-    '''WHITEPOINTS - Return XYZ values of standard white points
-    xyz = WHITEPOINTS(s) returns XYZ values of one of several standard
-    white points: d50, d55, d65, a, c'''
-    # Source: Matlab R2012b's whitepoint function
-
-    s = s.lower()
-    if s=='d50':
-        return np.array([0.9642,    1.0000,    0.8251])
-    elif s=='d55':
-        return np.array([0.9568,    1.0000,   0.9214])
-    elif s=='d65':
-        return np.array([0.9504,    1.0000,    1.0889])
-    elif s=='a':
-        return np.array([1.0985,    1.0000,    0.3558])
-    elif s=='c':
-        return np.array([0.9807,    1.0000,    1.1823])
-    else:
-        raise ValueError('Unknown white point')
 
 def resistor(white=False, extra=0):
     '''RESISTOR - Resistor code color map

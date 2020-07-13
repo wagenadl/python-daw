@@ -1,11 +1,7 @@
 #!/usr/bin/python3
 
 import numpy as np
-import scipy.io
-import re
-import inspect
-import tempfile
-import os
+import os.path
 
 def cell(dims):
     '''CELL - Construct a Matlab-style cell array
@@ -20,7 +16,7 @@ def iscell(obj):
     created by the CELL function.'''
     return type(obj)==np.ndarray and obj.dtype==object
 
-class struct:
+class Struct:
     '''STRUCT - A Matlab-style struct or struct array
     A STRUCT is an entity with named fields that contain arbitrary data.
     A STRUCT ARRAY is an N-dimensional array of STRUCTS.
@@ -28,7 +24,7 @@ class struct:
     the index is 1. We do the same, but with index=0.
     The content of the struct can be accessed using dot notation (as in
     Octave) or using indexing notation (as in Python):
-      s = struct()
+      s = Struct()
       s.foo = 3.14
       s['bar'] = 2.71
       print(s['foo'] + s.bar)
@@ -85,6 +81,10 @@ class struct:
     def fieldnames(self):
         '''FIELDNAMES - Field names as a list'''
         return [k for k in self.keys()]
+    def shape(self):
+        return self._contents_.shape
+    def ndim(self):
+        return self._contents_.ndim
 
     def __getattr__(self, key):
         # Dot notation is interpreted just like indexing notation
@@ -118,7 +118,7 @@ class struct:
                 return self
             else:
                 ct = self._contents_[key]
-                res = struct()
+                res = Struct()
                 if type(ct)==dict:
                     res._contents_.flat[0] = ct
                 else:
@@ -148,7 +148,7 @@ class struct:
             # Proper indexing
             # Value must be a struct with fields that match ours.
             # or it may be a dict with fields that match ours
-            if type(value)==struct:
+            if type(value)==Struct:
                 if value.fieldnames()==self.fieldnames():
                     self._contents_[key] = value
                 else:
@@ -205,7 +205,7 @@ def _pythonify_struct(v):
         for n in range(N):
             cc.flat[n] = _pythonify(v.flat[n][k])
         dct[f] = cc
-    ss = struct(**dct)
+    ss = Struct(**dct)
     return ss
     
 def _pythonify(v):
@@ -222,8 +222,11 @@ def loadmat(ifn):
     '''LOAD - Load a .mat file
     x = LOAD(ifn) loads the variables in the .mat file as a STRUCT.
     This only works for Matlab v6 and v7 files. See also LOAD.'''
+    import scipy.io
+    if not os.path.exists(ifn):
+        raise ValueError(f'File {ifn} does not exist')
     mat = scipy.io.loadmat(ifn)
-    res = struct()
+    res = Struct()
     for k, v in mat.items():
         if k.startswith('__') and k.endswith('__'):
             continue
@@ -247,6 +250,9 @@ def save(ofn, *args):
     Bad examples:
       save('/tmp/test,1.mat', x, y) # Comma is not allowed
       save('/tmp/test.mat', x+3) # "x+3" is not just a variable'''
+    import scipy.io
+    import inspect
+    import re
     frame = inspect.currentframe()
     frame = inspect.getouterframes(frame)[1]
     string = inspect.getframeinfo(frame[0]).code_context[0]
@@ -263,7 +269,7 @@ def save(ofn, *args):
             raise ValueError('Bad variable name: ' + names[k])
     dct = {}
     for k in range(N):
-        if type(args[k])==struct:
+        if type(args[k])==Struct:
             dct[names[k]] = args[k]._contents_
         else:
             dct[names[k]] = args[k]
@@ -275,6 +281,8 @@ def load(ifn):
     This works for anything that Octave can load. It is, however,
     significantly slower than LOADMAT, because it has to run Octave.
     IFN may not contain double quotes (").'''
+    import tempfile
+    import os
     with tempfile.TemporaryDirectory() as tmpdir:    
         mfile = tmpdir + '/convert.m'
         matfile = tmpdir + '/converted.mat'
@@ -284,20 +292,21 @@ def load(ifn):
             load("{ifn}");
             save("-v7", "{matfile}");
             ''')
-        os.system(f'octave -W -f {mfile}')
+        opts = '-W -f --no-init-file --no-init-path --no-site-file'
+        os.system(f'/usr/bin/octave {opts} {mfile}')
         res = loadmat(matfile)
     return res
         
     
 if __name__ == '__main__':
     from drepr import d
-    s = struct(foo=1)
+    s = Struct(foo=1)
     c = cell((3))    
     c[0] = 'x'
     c[1] = 'y'
     c[2] = 'z'
     d(c)
-    t = struct(foo=c)
+    t = Struct(foo=c)
     d(s)
     d(t)
     dir = '/home/wagenaar/python/daw/test'

@@ -3,13 +3,12 @@
 import numpy as np
 import inspect
 import numbers
-
 try:
-    import oct2py
-    haveo2p = True
+    import daw.octfile
+    haveoct = True
 except:
-    print('Notice: Could not load oct2py. Loading octave files disabled. ')
-    haveo2p = False
+    haveoct = False
+    # Quiet failure is OK; if we can't import octfile, neither can user.
 
 linelen = 70
 maxlines = 15
@@ -43,8 +42,8 @@ def ol_list(pfx, x):
 
 def ol_nd_array(pfx, x):
     N = np.prod(x.shape)
-    shp = '[' + '×'.join([str(v) for v in x.shape]) \
-          + ' ' + str(x.dtype) + ']'
+    shp = '(' + '×'.join([str(v) for v in x.shape]) \
+          + ' ' + str(x.dtype) + ')'
     if N==0 or N==np.max(x.shape):
         N = min(10, N)
         if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
@@ -54,7 +53,7 @@ def ol_nd_array(pfx, x):
             return ol_summary(pfx, [str(v) for v in x.flat], '[', ']', shp,
                               countrest=False)
     else:
-        return shp
+        return pfx + ' ' + shp
 
 def ol_string(pfx, x):
     if len(x) + len(pfx)> linelen:
@@ -74,23 +73,49 @@ def ol_other(pfx, x):
     
 def oneline(pfx, x):
     t = type(x)
-    if t == dict or (haveo2p and t==oct2py.io.Struct):
+    if t==dict:
         return ol_dict(pfx, x)
-    elif t == tuple:
+    elif haveoct and t==daw.octfile.Struct:
+        return ol_dict(pfx, x._contents_)
+    elif t==tuple:
         return ol_tuple(pfx, x)
-    elif t == list:
+    elif t==list:
         return ol_list(pfx, x)
-    elif t == np.ndarray:
+    elif t==np.ndarray:
         return ol_nd_array(pfx, x)
-    elif t == str:
+    elif t==str:
         return ol_string(pfx, x)
     elif isinstance(x, numbers.Number):
         return ol_number(pfx, x)
     else:
         return ol_other(pfx, x)
-    
+
+def d_struct(name, x):
+    if x.ndim()==0:
+        res = [f'{name} = «scalar Struct»:']
+        x = x._contents_.flat[0]
+        n = 0
+        for k,v in x.items():
+            res.append(oneline(f'  {k}:', v))
+            n += 1
+            if n >= maxlines:
+                break
+        if n < len(x):
+            res.append(f'  ...')
+            res.append(f'  ({len(x)} total items)')
+        return "\n".join(res)
+    else:
+        shp = '×'.join([f'{s}' for s in x.shape()])
+        res = [f'{name} = «size {shp} Struct array». Field names:']
+        res.append('  ' + ', '.join(x.fieldnames()))
+        return "\n".join(res)
+        
 def d_dict(name, x):
-    res = [f'{name} = «dict»:']
+    if len(x)==1:
+        kk = 'one key'
+    else:
+        kk = f'{len(x)} keys'
+    res = [f'{name} = «dict with {kk}»:']
     n = 0
     for k,v in x.items():
         res.append(oneline(f'  {k}:', v))
@@ -99,11 +124,10 @@ def d_dict(name, x):
             break
     if n < len(x):
         res.append(f'  ...')
-        res.append(f'  ({len(x)} total items)')
     return "\n".join(res)
 
 def d_tuple(name, x):
-    res = [f'{name} = «tuple»:']
+    res = [f'{name} = «tuple of length {len(x)}»:']
     n = 0
     for v in x:
         res.append(oneline(f'  ', v))
@@ -112,11 +136,10 @@ def d_tuple(name, x):
             break
     if n < len(x):
         res.append(f'  ...')
-        res.append(f'  ({len(x)} total items)')
     return "\n".join(res)
 
 def d_list(name, x, typ='list'):
-    res = [f'{name} = «{typ}»:']
+    res = [f'{name} = «{typ} of length {len(x)}»:']
     N = min((maxlines, len(x)))
     n = 0
     for v in x:
@@ -126,7 +149,6 @@ def d_list(name, x, typ='list'):
             break
     if N<len(x):
         res.append(f'  ...')
-        res.append(f'  ({len(x)} total items)')
     return "\n".join(res)
 
 def d_string(name, x):
@@ -142,16 +164,38 @@ def d_other(name, x):
     return ol_other(f'{name} =', x)
 
 def d_nd_array(name, x):
-    N = np.prod(x.shape)
-    shp = f"{'×'.join([str(v) for v in x.shape])} array of {x.dtype}"
-    res = [f'{name} = «{shp}»:']
-    if N==0 or N==np.max(x.shape):
+    if x.ndim==0:
+        N = 1
+        shp = "scalar"
+    elif x.ndim==1:
+        N = x.shape[0]
+        shp = f"vector of length {N}"
+    else:
+        N = np.prod(x.shape)
+        shp = f"size {'×'.join([str(v) for v in x.shape])}"
+    if x.ndim<3:
+        colon = ':'
+    else:
+        colon = ''
+    res = [f'{name} = «numpy array ({shp}) of {x.dtype}»{colon}']
+    if N==0:
+        res.append('  (empty)')
+    elif x.ndim==0:
+        if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
+            res.append(ol_summary('  ',
+                                  [f'{v:.4g}' for v in x.flat],
+                                  '', ''))
+        else:
+            res.append(ol_summary('  ',
+                                  [str(v) for v in x.flat],
+                                  '', ''))
+    elif x.ndim==1 or N==np.max(x.shape): # vector
         K = min(10, N)
         if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
             res.append(ol_summary('  ',
                                   [f'{v:.4g}' for v in x.flat[:K]],
                                   '[', ']'))
-        else:            
+        else:
             res.append(ol_summary('  ',
                                   [str(v) for v in x.flat[:K]],
                                   '[', ']'))
@@ -190,8 +234,8 @@ def d_nd_array(name, x):
             res1 += ' ]'
             res.append(res1)
     return "\n".join(res)
-    
-def _d1(x):
+
+def _getname():
     frame = inspect.currentframe()
     frame = inspect.getouterframes(frame)[2]
     #frame = inspect.getouterframes(frame)[1]
@@ -199,18 +243,23 @@ def _d1(x):
     sol = s.find('(') + 1
     eol = s.rfind(')')
     name = s[sol:eol]
+    return name
+
+def d_any(x, name):
     t = type(x)
-    if t == dict or (haveo2p and t==oct2py.io.Struct):
+    if t==dict:
         return d_dict(name, x)
-    elif t == tuple:
+    elif haveoct and t==daw.octfile.Struct:
+        return d_struct(name, x)
+    elif t==tuple:
         return d_tuple(name, x)
-    elif t == list:
+    elif t==list:
         return d_list(name, x)
-    elif t == type({}.keys()):
+    elif t==type({}.keys()):
         return d_list(name, x, 'dict_keys')
-    elif t == np.ndarray:
+    elif t==np.ndarray:
         return d_nd_array(name, x)
-    elif t == str:
+    elif t==str:
         return d_string(name, x)
     elif isinstance(x, numbers.Number):
         return d_number(name, x)
@@ -218,22 +267,7 @@ def _d1(x):
         return d_other(name, x)
 
 def d(x):
-    print(_d1(x))
+    print(d_any(x, _getname()))
 
 def dvalue(x):
-    return _d1(x)
-        
-def loadoct(fn):
-    if not haveo2p:
-        raise Exception('Oct2py not available. Cannot load octave file.')
-    if fn.find("\\") >= 0:
-        raise ValueError('Filename may not contain backslash. Use slash.')
-    if fn.find("'") >= 0:
-        if fn.find('"') >= 0:
-            raise ValueError('Filename may not contain both kinds of quotes')
-        code = f'x=load("{fn}");'
-    else:
-        code = f"x=load('{fn}');"
-    oc = oct2py.Oct2Py()
-    oc.eval(code)
-    return oc.pull('x')
+    return d_any(x, _getname())
