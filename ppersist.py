@@ -4,6 +4,7 @@ import numpy as np
 import pickle
 import inspect
 import re
+import collections
 
 def cansave(v):
     '''CANSAVE - Can a given object be saved by PPERSIST?
@@ -39,16 +40,18 @@ def save(fn, *args):
     SAVE(filename, var1, var2, ..., varN) saves each of the variables
     VAR1...VARN into a single PICKLE file.
     The result can be loaded with
+      LOAD(filename)
+    or
       var1, var2, ..., varN = LOAD(filename)
-    or with
+    or
       vv = LOADDICT(filename)
     In the latter case, vv becomes a DICT with the original variable
     names as keys.
     Note that SAVE is a very hacked function: It uses the INSPECT module
     to determine how it was called. That means that VARi must all be simple
-    variables and the FILENAME, if given as a direct string, may not contain
-    commas. Variable names must start with a letter and may only contain
-    letters, numbers, and underscore.
+    variables and that the FILENAME, if given as a direct string, may not 
+    contain commas. Variable names must start with a letter and may only
+    contain letters, numbers, and underscore.
     OK examples:
       x = 3
       y = 'Hello'
@@ -59,9 +62,8 @@ def save(fn, *args):
     Bad examples:
       save('/tmp/test,1.pkl', x, y)
       save('/tmp/test.pkl', x+3)'''
-    frame = inspect.currentframe()
-    frame = inspect.getouterframes(frame)[1]
-    string = inspect.getframeinfo(frame[0]).code_context[0]
+    frame = inspect.currentframe().f_back
+    string = inspect.getframeinfo(frame).code_context[0]
     sol = string.find('(') + 1
     eol = string.find(')')
     names = [a.strip() for a in string[sol:eol].split(',')]
@@ -108,12 +110,39 @@ def loaddict(fn):
 
 def load(fn):
     '''LOAD - Reload data saved with SAVE
-    v1, v2, ..., vn = LOAD(fn) loads the file named FN, which should have
-    been created by SAVE(fn, v1, v2, ..., vn).'''
+    vv = LOAD(fn) loads the file named FN, which should have been created
+    by SAVE(fn, v1, v2, ..., vn) and returns a named tuple. Of course
+    you can also say: v1, v2, ..., vn = LOAD(fn) to immediately unpack 
+    the tuple.
+    Simply calling LOAD(fn) without assignment to variables directly
+    loads the variables saved by SAVE(fn, ...) into the callers namespace. 
+    This is a super ugly Matlab-style hack, but really convenient. 
+'''
     dct = loaddict(fn)
     names = dct['__names__']
-    res = []
-    for k in names:
-        res.append(dct[k])
-    return tuple(res)
 
+    frame = inspect.currentframe().f_back
+    string = inspect.getframeinfo(frame).code_context[0]
+    if '=' in string:
+        # Return a tuple
+        bits = fn.split('/')
+        leaf = bits[-1]
+        bits = fn.split('.')
+        base = bits[0]
+        typename = ''
+        for b in base:
+            if (b>='A' and b<='Z') or (b>='a' and b<='z') \
+               or (b>='0' and b<='9' and typename!=''):
+                typename += b
+        if typename=='':
+            typename='anon'
+        ResType = collections.namedtuple(typename, names)
+        res = []
+        for k in names:
+            res.append(dct[k])
+        return ResType._make(res)
+    else:
+        # Else inject directly into calling frame
+        for k in names:
+            frame.f_locals[k] = dct[k]
+        print(f'Loaded the following: {", ".join(names)}.')

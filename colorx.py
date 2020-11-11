@@ -140,7 +140,7 @@ def linearrgbtohcl(cc, gamma=10):
     d_BR = cc[:,2]-cc[:,0]
     C = (Q/3) * (np.abs(d_RG) + np.abs(d_GB) + np.abs(d_BR))
 
-    H0 = np.atan(d_GB/d_RG)
+    H0 = np.arctan(d_GB/d_RG)
 
     H = (2/3) * H0
 
@@ -314,7 +314,7 @@ def cielabtocielch(cc):
 
     cc, S = unshape(cc)
     c = np.sqrt(cc[:,1]**2 + cc[:,2]**2)
-    h = np.atan2(cc[:,2], cc[:,1])
+    h = np.arctan2(cc[:,2], cc[:,1])
     cc[:,1] = c
     cc[:,2] = h
     return reshape(cc, S)

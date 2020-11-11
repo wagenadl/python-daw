@@ -170,8 +170,7 @@ def _pythonify_matrix(v):
             return v[0,0]
         elif n==1 or m==1:
             return v.flatten()
-        else:
-            return v
+    return v
 
 def _pythonify_string(v):
     if len(v)==1:

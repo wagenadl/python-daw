@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import numpy as np
-import peakx
+from .. import peakx
 
 _corrfac = {}
 def _estimatemuckfactor(chunksize, nchunks=1000, ipart=25):
