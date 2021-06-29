@@ -4,13 +4,13 @@ from . import basicx
 import numpy as np
 from scipy.signal import filtfilt
 
-def boxcaravg(x, N, dim=0):
+def boxcaravg(x, N, axis=0):
     '''BOXCARAVG - Apply box car averging to data
     y = BOXCARAVG(x, N) passes the vector through a 2N+1-point box-car
     averaging filter.
-    If X is a matrix, works in first dimension. Optional argument DIM 
+    If X is a matrix, works in first dimension. Optional argument AXIS 
     overrides that default.'''
-    x, s = basicx.semiflatten(x, dim)
+    x, s = basicx.semiflatten(x, axis)
     K, L = x.shape
 
     y = 0*x
@@ -104,19 +104,19 @@ def butterlow2(f):
     b = [n0/d0, n1/d0, n2/d0]
     return b, a
 
-def fupsample(x, n, t=None, dim=0):
+def fupsample(x, n, t=None, axis=0):
     '''FUPSAMPLE - Fourier upsampling 
     y, idx = FUPSAMPLE(x, n) uses Fourier upsampling to improve temporal
     resolution on signal X by a factor N.
     FUPSAMPLE operates on the first dimension of X, unless optional argument
-    DIM overrides.
+    AXIS overrides.
     On return, IDX is a real vector of pseudo-indices into X corresponding
     to the data in Y.
     y, tout = FUPSAMPLE(x, n, t), where T are time stamps, returns the time
     stamps of the output.
     CAUTION: if the length of X is odd, the last data point is dropped.'''
 
-    x, s = basicx.semiflatten(x, dim)
+    x, s = basicx.semiflatten(x, axis)
     K, L = x.shape
 
     if n==1:
@@ -138,7 +138,7 @@ def fupsample(x, n, t=None, dim=0):
     else:
         return y, np.interp(idx, np.arange(len(t)), t)
 
-def gaussianblur1d(img, rx, dim=0, normedge=False, radiusmul=4):
+def gaussianblur1d(img, rx, axis=0, normedge=False, radiusmul=4):
     '''GAUSSIANBLUR1D - One-dimensional Gaussian blurring
     img=GAUSSIANBLUR1D(img, r) performs a Gaussian blur on a 1d "image."
     More precisely, the input is convolved with a kernel
@@ -148,7 +148,7 @@ def gaussianblur1d(img, rx, dim=0, normedge=False, radiusmul=4):
     for dx is -4 rx to +4 rx. Optional argument RADIUSMUL overrides that
     factor 4.
     If IMG is multidimensional, operates on the first dimension, unless
-    optional argument DIM overrides.
+    optional argument AXIS overrides.
     Optional argument NORMEDGE normalizes the data near the edges taking
     into account that part of the Gaussian is outside the domain of the 
     data.'''
@@ -156,7 +156,7 @@ def gaussianblur1d(img, rx, dim=0, normedge=False, radiusmul=4):
     flt = np.exp(-.5*(np.arange(-L, L+1)/rx)**2)
     flt /= np.sum(flt)
 
-    img, s = basicx.semiflatten(img, dim)
+    img, s = basicx.semiflatten(img, axis)
 
     K, N = img.shape
     res = np.zeros(img.shape, img.dtype)
@@ -278,10 +278,10 @@ def hermiteinterp(xx, n, bias=0, tension=0):
         yy[k,:] = y
     return basicx.semiunflatten(yy, s), tt
 
-def medianflt(xx, dim=0):
+def medianflt(xx, axis=0):
     '''MEDIANFLT - Three-point median filter
     yy = MEDIANFLT(xx) passes the vector XX through a 3 point median filter.
-    For multidimension data, works along the DIM-th axis (default: first).'''
+    For multidimension data, works along the AXIS-th axis (default: first).'''
     xx, s = basicx.semiflatten(xx)
     K,L = xx.shape
     yy = np.zeros(xx.shape, xx.dtype)
@@ -292,11 +292,11 @@ def medianflt(xx, dim=0):
         yy[k,:] = np.median(np.stack((x1,x2,x3), 0), 0)
     return basicx.semiunflatten(yy, s)
 
-def medianfltn(xx, N, dim=0):
+def medianfltn(xx, N, axis=0):
     '''MEDIANFLT - Abitrary median filter
     yy = MEDIANFLT(xx, n) passes the vector XX through a 2n+1-point median 
     filter.
-    For multidimension data, works along the DIM-th axis (default: first).'''
+    For multidimension data, works along the AXIS-th axis (default: first).'''
     
     xx, s = basicx.semiflatten(xx)
     K,L = xx.shape
@@ -309,7 +309,7 @@ def medianfltn(xx, N, dim=0):
         yy[k,:] = np.median(z, 0)
     return basicx.semiunflatten(yy, s)
 
-def templatefilter(xx, f_s, f_line=60, f_max=500, nperiods=50, dim=0,
+def templatefilter(xx, f_s, f_line=60, f_max=500, nperiods=50, axis=0,
                    xref=None):
     '''TEMPLATEFILTER - Remove 60 Hz line noise by template filtering
     yy = TEMPLATEFILTER(xx, f_s) removes (nearly) periodic noise (such as
@@ -321,7 +321,7 @@ def templatefilter(xx, f_s, f_line=60, f_max=500, nperiods=50, dim=0,
     periodic noise; noise (or signal) above that frequency is not 
     treated. Default: F_MAX = 500.
     NPERIODS is the number of periods to use for estimation; default: 50.
-    TEMPLATEFILTER works on vectors, or on the DIM-th axis of arrays.
+    TEMPLATEFILTER works on vectors, or on the AXIS-th axis of arrays.
     Instead of specifying F_LINE, you can also specify a reference signal 
     in XREF. In that case, the period is determined from the upward
     crossings of the reference.
@@ -330,7 +330,7 @@ def templatefilter(xx, f_s, f_line=60, f_max=500, nperiods=50, dim=0,
     a Gaussian blur filter with RX = |NPERIODS| instead. This has better
     behavior near the start and end of the signal, but is slower.'''
 
-    xx, s = basicx.semiflatten(xx, dim)
+    xx, s = basicx.semiflatten(xx, axis)
     K, X = xx.shape
     yy = np.zeros(xx.shape, xx.dtype)
 
@@ -366,8 +366,8 @@ def templatefilter(xx, f_s, f_line=60, f_max=500, nperiods=50, dim=0,
         b, a = butterlow1(1/nperiods)
         zz = filtfilt(b, a, zz, axis=0)
     else:
-        #zz = medianfltn(zz, -nperiods, dim=0)
-        zz = gaussianblur1d(zz, -nperiods, dim=0, normedge=True, radiusmul=2)
+        #zz = medianfltn(zz, -nperiods, axis=0)
+        zz = gaussianblur1d(zz, -nperiods, axis=0, normedge=True, radiusmul=2)
         
     # Step four: Smooth the template by assuming there are no
     # high frequency components to the pickup.
@@ -391,3 +391,62 @@ def templatefilter(xx, f_s, f_line=60, f_max=500, nperiods=50, dim=0,
     yy = xx - zz[:X]
 
     return basicx.semiunflatten(yy, s)
+
+def dynamicrebin(nn, N, axis=-1):
+    '''DYNAMICREBIN - Poisson-aware histogram filtering
+    kk = DYNAMICREBIN(nn, N) returns a version of the histogram NN smoothed
+    by time-dependent gaussian kernels such that each kernel covers an area
+    containing N events. This is primarily intended for PSTH smoothing. You
+    create a PSTH with a ridiculously small bin size, then call this function
+    to get a reasonable looking graph.
+
+    For convenience, DYNAMICREBIN can be called directly on multiple 
+    histograms contained in a multidimensional array. In that case, it 
+    operates on the final axis. (Optional argument AXIS specifies which 
+    axis to use.)
+
+    Algorithm details: At each point t, we find dt such that nn[t-dt:t+dt] 
+    sums at least to N. Then we create a kernel
+        f(t,t') = A exp(-½(t-t')^2 / (dt^2+1)
+    where A is a normalization constant.
+    Finally,
+        kk(t') = sum_t' nn(t) f(t,t').
+
+    Invariant: By construction, sum(kk) = sum(nn), so overall spike count
+    is preserved by the algorithm.
+
+    Caveat: The algorithm doesn't behave great at edges (dt grows). It may 
+    be worth calculating the initial histogram over a wider timerange than
+    what you want for the final plot.
+
+    See CNTC p. 1188.'''
+
+    if len(nn.shape)>1:
+        # Deal with tensor case simply by repeatedly calling vector case
+        nn, S = basicx.semiflatten(nn, axis)
+        kk = np.zeros(nn.shape)
+        for q in range(nn.shape[0]):
+            kk[q,:] = dynamicrebin(nn[q,:], N)
+        return basicx.semiunflatten(kk, S)
+
+    T = len(nn)
+
+    # Calculate dt for all t
+    dt = np.zeros(T)
+    for t in range(T):
+        for k in range(T):
+            t0 = max(t-k, 0)
+            t1 = min(t+k+1, T)
+            if np.sum(nn[t0:t1])>N:
+                dt[t] = k
+                break
+
+    # Calculate kernels and accummulate results
+    tt = np.arange(T)
+    kk = np.zeros(T)
+    for t in range(T):
+        krn = np.exp(-.5*(tt-t)**2/(dt[t]**2+1))
+        krn /= np.sum(krn) # Numerically, because it's not quite an integral
+        kk += krn*nn[t]
+
+    return kk

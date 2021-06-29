@@ -10,10 +10,13 @@ def cansave(v):
     '''CANSAVE - Can a given object be saved by PPERSIST?
     CANSAVE(v) returns True if V can be saved by PPERSIST.
     Currently, PPERSIST can save:
+      - None
       - Numpy arrays
       - Strings
       - Simple numbers (int, float, complex)
       - Lists, tuples, and dicts containing those (even hierarchically).'''
+    if v is None:
+        return True
     t = type(v)
     if t==np.ndarray:
         return True
@@ -106,7 +109,22 @@ def loaddict(fn):
     as keys.'''
     with open(fn, 'rb') as fd:
         dct = pickle.load(fd)
+    del dct['__names__']
     return dct
+
+def loadtuple(fn, typename='PPERSIST'):
+    '''LOADTUPLE - Reload data saved with SAVE or SAVEDICT
+    x = LOADTUPLE(fn) loads the file named FN which should have been created
+    by SAVE. The result is a named tuple with the original variable names
+    as keys.'''
+    with open(fn, 'rb') as fd:
+        dct = pickle.load(fd)
+    names = dct['__names__']
+    tpl = collections.namedtuple(typename, names)
+    lst = []
+    for n in names:
+        lst.append(dct[n])
+    return tpl(*lst)
 
 def load(fn):
     '''LOAD - Reload data saved with SAVE
@@ -116,9 +134,10 @@ def load(fn):
     the tuple.
     Simply calling LOAD(fn) without assignment to variables directly
     loads the variables saved by SAVE(fn, ...) into the callers namespace. 
-    This is a super ugly Matlab-style hack, but really convenient. 
-'''
-    dct = loaddict(fn)
+    This is a super ugly Matlab-style hack, but really convenient.
+    LOADDICT and LOADTUPLE are cleaner alternatives'''
+    with open(fn, 'rb') as fd:
+        dct = pickle.load(fd)
     names = dct['__names__']
 
     frame = inspect.currentframe().f_back

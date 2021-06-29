@@ -24,15 +24,22 @@ def ol_summary(pfx, ss, bo, bc, sfx='', countrest=True):
             break
     if len(use) < len(ss):
         if countrest:
-            use.append(f'... (+{len(ss)-len(use)})')
+            #use.append(f'... (+{len(ss)-len(use)})')
+            use.append(f'... (𝘯={len(ss)})')
         else:
             use.append(f'...')
     return f'{pfx} {bo} {", ".join(use)} {bc} {sfx}'
+
 
 def ol_dict(pfx, x):
     lst = list(x.keys())
     lst.sort()
     return ol_summary(pfx, lst, '{', '}')
+
+def ol_struct(pfx, x):
+    lst = list(x.keys())
+    lst.sort()
+    return ol_summary(pfx, lst, '{', '} «struct»')
 
 def ol_tuple(pfx, x):
     return ol_summary(pfx, [str(v) for v in x], '(', ')')
@@ -76,7 +83,7 @@ def oneline(pfx, x):
     if t==dict:
         return ol_dict(pfx, x)
     elif haveoct and t==daw.octfile.Struct:
-        return ol_dict(pfx, x._contents_)
+        return ol_struct(pfx, x)
     elif t==tuple:
         return ol_tuple(pfx, x)
     elif t==list:

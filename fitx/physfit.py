@@ -99,7 +99,7 @@ def physfit(f, x, y, sy=None, sx=None, p0=None, sxy=None):
         lp1 = np.polyfit(x, y, 1)
         lp2 = np.polyfit(x, y, 2)
         sgnB = np.sign(lp2[0]) * np.sign(lp1[0])      
-        sgnA = sign(lp2[0])
+        sgnA = np.sign(lp2[0])
         y_ = np.unique(np.sort(y))
         if sgnA<0:
             y_ = np.flip(y_)

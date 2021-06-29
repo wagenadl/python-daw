@@ -4,31 +4,43 @@ from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog
 from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QPolygon
 from PyQt5.QtCore import Qt, QRect, QPoint
 import numpy as np
-from . import openEphysIO
 import os
 import ctypes as ct
 import sip
 
 if os.name=='posix':
-    pfx = 'lib'
+    _pfx = 'lib'
 else:
-    pfx =''
-libname = pfx + 'pyphyc'
+    _pfx =''
+_libname = _pfx + 'pyphyc'
 
 try:
-    pyphyc = np.ctypeslib.load_library(libname, os.path.dirname(__file__))
+    _pyphyc = np.ctypeslib.load_library(_libname, os.path.dirname(__file__))
 except:
-    pyphyc = np.ctypeslib.load_library(libname, '.')
+    _pyphyc = np.ctypeslib.load_library(_libname, '.')
 
-pyphyc.quickdraw.argtypes = [ct.c_int64,
-                             ct.c_int64,
-                             ct.c_int,
-                             ct.c_int,
-                             ct.c_int,
-                             ct.c_int,
-                             ct.c_int,
-                             ct.c_float]
+_pyphyc.quickdraw.argtypes = [ct.c_int64,
+                              ct.c_int64,
+                              ct.c_int,
+                              ct.c_int,
+                              ct.c_int,
+                              ct.c_int,
+                              ct.c_int,
+                              ct.c_float]
 
+def lastlessthan(xx, y):
+    j = None
+    for i in range(len(xx)):
+        if xx[i]<y:
+            j = i
+        else:
+            return j
+
+def firstgreaterthan(xx, y):
+    for i in range(len(xx)):
+        if xx[i]>y:
+            return i
+    return None
 
 def sensiblestep(mx):
     '''dx = SENSIBLESTEP(mx) returns a sensible step size not much smaller
@@ -39,19 +51,19 @@ def sensiblestep(mx):
       5<=MX<10 -> DX=5
     etc.'''
     
-    lg=np.log10(mx)
-    ord=np.floor(lg)
-    sub = 10**(lg-ord)
+    lg = np.log10(mx)
+    mag = np.floor(lg)
+    sub = 10**(lg-mag)
     if sub>5:
-        sub=5
+        sub = 5
     elif sub>2:
-        sub=2
+        sub = 2
     else:
-        sub=1
-    return sub * 10**ord
+        sub = 1
+    return sub * 10**mag
 
 
-class EPhysView(QWidget):
+class _EPhysView(QWidget):
     def __init__(self, parent=None):
         self.mem = None
         self.fs_Hz = None
@@ -67,6 +79,7 @@ class EPhysView(QWidget):
         self.ticklen = 3
         self.tstim_s = []
         self.stimlabels = []
+        self.spikes = [] # List of (c, tt) pairs
         super().__init__(parent)
         self.setWindowTitle('PyPhy')
 
@@ -87,12 +100,21 @@ class EPhysView(QWidget):
         self.csep_digi = np.median(np.std(self.mem[:T,:], 0)) * 10
         self.update()
 
+    def setSpikes(self, spkmap):
+        '''SETSPIKES - Add spike markers to the display
+        SETSPIKES(spkmap), where SPKMAP is a list of (c, tt) pairs
+        containing electrode channels (C) and associated vectors of 
+        spike times (TT), adds graphical marks for those
+        spikes.'''
+        self.spikes = spkmap
+        self.update()
+
     def setStimuli(self, tt_s, labels=None):
         '''SETSTIMULI - Add stimulus markers to the display
         SETSTIMULI(tt) where TT is a vector of times in seconds, adds
         stimulus markers to the display.
         SETSTIMULI(tt, labels) where LABELS is a list of labels that
-        has the same length as TT also provides labels for the stimuli.'''
+        has the same length as TT also provides labels for the vis_stimuli.'''
         
         self.tstim_s = tt_s
         self.stimlabels = labels
@@ -126,16 +148,18 @@ class EPhysView(QWidget):
             scl = 1
         if k==Qt.Key_Plus or k==Qt.Key_Equal:
             self.csep_digi /= np.sqrt(2)
+            self.setWindowTitle(f'Vertical scale: {self.csep_digi}')
         elif k==Qt.Key_Minus:
             self.csep_digi *= np.sqrt(2)
+            self.setWindowTitle(f'Vertical scale: {self.csep_digi}')
         elif k==Qt.Key_Period:
-            self.t0_s = self.t0_s + self.tscale_s/2
+            self.t0_s = self.t0_s + self.tscale_s/4
             self.tscale_s /= 2
-            self.t0_s = max(0, self.t0_s - self.tscale_s/2)
+            self.t0_s = max(0, self.t0_s - self.tscale_s/4)
         elif k==Qt.Key_Comma:
-            self.t0_s = self.t0_s + self.tscale_s/2
+            self.t0_s = self.t0_s + self.tscale_s/4
             self.tscale_s *= 2
-            self.t0_s = max(0, self.t0_s - self.tscale_s/2)
+            self.t0_s = max(0, self.t0_s - self.tscale_s/4)
         elif k==Qt.Key_BracketRight:
             self.c0 = self.c0 + self.cscale_chans//2
             self.cscale_chans = max(10, int(self.cscale_chans/2))
@@ -170,15 +194,9 @@ class EPhysView(QWidget):
                                        - self.tscale_s))
         elif k==Qt.Key_P:
             t0 = self.t0_s
-            t1 = None
-            i = 0
-            for t in self.tstim_s:
-                if t<t0:
-                    t1 = t
-                else:
-                    break
-                i += 1
-            if t1 is not None:
+            i = lastlessthan(self.tstim_s, t0)
+            if i is not None:
+                t1 = self.tstim_s[i]
                 self.t0_s = max(0, t1 - self.tscale_s/4)
                 lbl = f'Stimulus #{i} at {t1:.3f}'
                 if self.stimlabels is not None:
@@ -186,14 +204,9 @@ class EPhysView(QWidget):
                 self.setWindowTitle(lbl)
         elif k==Qt.Key_N:
             t0 = self.t0_s + self.tscale_s/2
-            t1 = None
-            i = 0
-            for t in self.tstim_s:
-                if t>t0:
-                    t1 = t
-                    break
-                i += 1
-            if t1 is not None:
+            i = firstgreaterthan(self.tstim_s, t0)
+            if i is not None:
+                t1 = self.tstim_s[i]
                 self.t0_s = max(0, t1 - self.tscale_s/4)
                 self.setWindowTitle(f'Stimulus #{i} at {t1:.3f}')
         elif k==Qt.Key_S:
@@ -214,107 +227,165 @@ class EPhysView(QWidget):
     def paintEvent(self, evt):
         ptr = QPainter(self)
         try:
-            ptr.fillRect(QRect(0,0,self.width(),self.height()),
-                         QColor(0,0,0))
-            w = self.width() - self.margin_left
-            h = self.height() - self.margin_top - self.margin_bottom
-            if w<5 or h<5:
-                return
-            ttick = sensiblestep(self.tscale_s/(1 + w/200))
-    
-            def t2x(t):
-                return int(self.margin_left + (t-self.t0_s)*w/self.tscale_s + .5)
-            def kk2x(kk):
-                return self.margin_left + (kk/self.fs_Hz-self.t0_s)*w/self.tscale_s
-    
-            def cv2y(c, v=0):
-                return int(self.margin_top + h*(c+.5-self.c0)/self.cscale_chans
-                           + h*v/self.cscale_chans/self.csep_digi + .5)
-            def cvv2y(c, v=0):
-                return (self.margin_top + h*(c+.5-self.c0)/self.cscale_chans
-                        + h*v/self.cscale_chans/self.csep_digi)
-    
-            t0 = np.ceil(self.t0_s/ttick) * ttick
-            t1 = np.floor((self.t0_s+self.tscale_s)//ttick) * ttick
-            ptr.setPen(QColor(255, 255, 255))
-            for t in np.arange(t0, t1, ttick):
-                x = t2x(t)
-                ptr.drawText(QRect(x-100, 0,
-                                   200, self.margin_top),
-                             Qt.AlignCenter,
-                             f'{t:.3f}')
-                ptr.drawText(QRect(x-100, self.margin_top+h,
-                                   200, self.margin_bottom),
-                             Qt.AlignCenter,
-                             f'{t:.3f}')
-    
-            ptr.setPen(QColor(64, 64, 64))
-            for t in np.arange(t0, t1, ttick):
-                x = t2x(t)
-                ptr.drawLine(QPoint(x,self.margin_top),
-                             QPoint(x,self.margin_top+h))
-    
-            ptr.setPen(QColor(255, 255, 255))
-            for c in np.arange(self.c0, self.c0+self.cscale_chans, dtype=int):
-                y = cv2y(c)
-                if self.chlist is None:
-                    cname = f'{c}'
-                else:
-                    cname = self.chlist[c]['channel_name']
-                ptr.drawText(QRect(0, y-50,
-                                   self.margin_left - 5, 100),
-                             Qt.AlignRight + Qt.AlignVCenter,
-                             cname)
-
-            L = self.mem.shape[0]
-            K = int(self.tscale_s * self.fs_Hz)
-            k0 = min(int(self.t0_s * self.fs_Hz), L)
-            k1 = min(k0 + K, L)
-            #dat = np.zeros((2*K,), dtype=np.int32)
-            #print(K, dat.shape)
-            #dat[::2] = kk2x(np.arange(k0,k1)) + .5
-            #for c in np.arange(self.c0, self.c0+self.cscale_chans, dtype=int):
-            #    dat[1::2] = cvv2y(c, self.mem[k0:k1,c]) + .5
-            #    ptr.drawPolyline(dat.data.tobytes(), K)
-            C = self.mem.shape[1]
-            c1 = min(self.c0 + self.cscale_chans, C)
-            for c in np.arange(self.c0, c1, dtype=int):
-                clr = QColor(int(127+127*np.cos(c*2.127+.1238)),
-                             int(127+127*np.cos(c*4.5789+4.123809)),
-                             int(127+127*np.cos(c*8.123+23.32412)))
-                ptr.setBrush(clr)
-                ptr.setPen(clr)
-                dt1 = self.mem[k0:k1,c]
-                if dt1.dtype!=np.int16:
-                    print('convert')
-                    dt1 = dt1.astype(np.int16)
-                dataptr = dt1.__array_interface__['data'][0]
-                datastride = (dt1[1:].__array_interface__['data'][0] - dataptr) // 2
-                pyphyc.quickdraw(sip.unwrapinstance(ptr),
-                                 dataptr,
-                                 K,
-                                 datastride,
-                                 t2x(self.t0_s),
-                                 w,
-                                 cv2y(c),
-                                 -h/self.cscale_chans/self.csep_digi) 
+            self._doPaint(ptr)
         finally:
             del ptr
 
-            
+    def _doPaint(self, ptr):
+        ptr.fillRect(QRect(0,0,self.width(),self.height()),
+                     QColor(0,0,0))
+        w = self.width() - self.margin_left
+        h = self.height() - self.margin_top - self.margin_bottom
+        if w<5 or h<5:
+            return
 
-if __name__=='__main__':
-    root = '/media/wagenaar/datatransfer/2020-10-13_20-24-19'
-    mem, s0, f_Hz, chlist = openEphysIO.loadcontinuous(root,
-                                                       1,
-                                                       1,
-                                                       'Neuropix-PXI-101.0',
-                                                       'salpa')
-    pegs = np.loadtxt(f'{root}/experiment1/recording1/pegs.txt')
-    app = QApplication([])
-    wdg = EPhysView()
-    wdg.setData(mem, f_Hz, chlist)
-    wdg.setStimuli(pegs / f_Hz)
-    wdg.show()
-    app.exec()
+        def t2x(t): # Single value
+            return int(self.margin_left
+                       + (t-self.t0_s)*w/self.tscale_s + .5)
+        def t2x(t): # Vector
+            return (self.margin_left
+                    + (t-self.t0_s)*w/self.tscale_s + .5).astype(int)
+        def cv2y(c, v=0): # Single value
+            return int(self.margin_top + h*(c+.5-self.c0)/self.cscale_chans
+                       + h*v/self.cscale_chans/self.csep_digi + .5)
+
+        self._drawTimeAxis(ptr, t2x, sensiblestep(self.tscale_s/(1 + w/200)))
+        self._drawChannelNames(ptr, cv2y)
+        if self.mem is not None:
+            self._drawEphysTraces(ptr, cv2x, cv2y)
+        self._drawSpikes(ptr, tt2x, cv2y)
+
+    def _drawTimeAxis(self, ptr, t2x, ttick):
+        t0 = np.ceil(self.t0_s/ttick) * ttick
+        t1 = np.floor((self.t0_s+self.tscale_s)//ttick) * ttick
+
+        # Draw text for time along top and bottom
+        ptr.setPen(QColor(255, 255, 255))
+        for t in np.arange(t0, t1, ttick):
+            x = t2x(t)
+            ptr.drawText(QRect(x-100, 0,
+                               200, self.margin_top),
+                         Qt.AlignCenter,
+                         f'{t:.3f}')
+            ptr.drawText(QRect(x-100, self.margin_top+h,
+                               200, self.margin_bottom),
+                         Qt.AlignCenter,
+                         f'{t:.3f}')
+
+        # Draw tick marks for time
+        ptr.setPen(QColor(64, 64, 64))
+        for t in np.arange(t0, t1, ttick):
+            x = t2x(t)
+            ptr.drawLine(QPoint(x, self.margin_top),
+                         QPoint(x, self.margin_top+h))
+
+    def _drawChannelNames(self, ptr, cv2y):
+        # Draw channel names
+        ptr.setPen(QColor(255, 255, 255))
+        for c in np.arange(self.c0, self.c0+self.cscale_chans, dtype=int):
+            y = cv2y(c)
+            if self.chlist is None:
+                cname = f'{c}'
+            else:
+                cname = self.chlist[c]['channel_name']
+            ptr.drawText(QRect(0, y-50,
+                               self.margin_left - 5, 100),
+                         Qt.AlignRight + Qt.AlignVCenter,
+                         cname)
+
+    def _drawEphys(self, ptr, t2x, cv2y):
+        # Draw electrophysiology traces
+        L = self.mem.shape[0]
+        K = int(self.tscale_s * self.fs_Hz)
+        k0 = min(int(self.t0_s * self.fs_Hz), L)
+        k1 = min(k0 + K, L)
+        C = self.mem.shape[1]
+        c1 = min(self.c0 + self.cscale_chans, C)
+        for c in np.arange(self.c0, c1, dtype=int):
+            clr = QColor(int(127+127*np.cos(c*2.127+.1238)),
+                         int(127+127*np.cos(c*4.5789+4.123809)),
+                         int(127+127*np.cos(c*8.123+23.32412)))
+            ptr.setBrush(clr)
+            ptr.setPen(clr)
+            dt1 = self.mem[k0:k1,c]
+            if dt1.dtype!=np.int16:
+                print('convert')
+                dt1 = dt1.astype(np.int16)
+            dptr = dt1.__array_interface__['data'][0]
+            dstride = (dt1[1:].__array_interface__['data'][0] - dataptr) // 2
+            _pyphyc.quickdraw(sip.unwrapinstance(ptr),
+                              dptr,
+                              K,
+                              dstride,
+                              t2x(self.t0_s),
+                              w,
+                              cv2y(c),
+                              -h/self.cscale_chans/self.csep_digi)
+
+    def _drawSpikes(self, tt2x, cv2y):
+        t0 = self.t0_s
+        t1 = self.t0_s+self.tscale_s
+        R = 3
+        c1 = .5
+        for c, tt in self.spikes:
+            if c<self.c0 or c >= self.c0 + self.cscale_chans:
+                continue
+            xx = tt2x(tt[np.logical_and(tt>=t0, tt<t1)])
+            if len(xx):
+                y = cv2y(c)
+                clr = QColor(int(127+127*np.cos(c1*2.127+.1238)),
+                             int(127+127*np.cos(c1*4.5789+4.123809)),
+                             int(127+127*np.cos(c1*8.123+23.32412)))
+                ptr.setBrush(clr)
+                for x in xx:
+                    ptr.drawEllipse(QRect(x-R, y-R, 2*R, 2*R)
+                c1 += 1
+            
+            
+class PyPhy:
+    app = None
     
+    def __init__(self):
+        if QApplication.instance() is None:
+            PyPhy.app = QApplication(["pyphy"])
+        self.win = _EPhysView()
+        self.win.show()
+
+    def __del__(self):
+        try:
+            self.win.close()
+            del self.win
+        except:
+            pass
+
+    def setData(self, mem, fs_Hz, chlist=None):
+        '''SETDATA - Specify data to display
+        SETDATA(mem, fs_Hz) specifies the data (shaped TxC) to display and
+        the sample rate for the data.
+        Optional argument CHLIST must be a list or dict with channel numbers.
+        Each value in CHLIST must be a dict with channel info as contained
+        in OpenEphys's metadata. The only key required here is CHANNEL_NAME.
+        '''
+        self.win.setData(mem, fs_Hz, chlist)
+
+    def setStimuli(self, tt_s, labels=None):
+        '''SETSTIMULI - Add stimulus markers to the display
+        SETSTIMULI(tt) where TT is a vector of times in seconds, adds
+        stimulus markers to the display.
+        SETSTIMULI(tt, labels) where LABELS is a list of labels that
+        has the same length as TT also provides labels for the vis_stimuli.'''
+        self.win.setStimuli(tt_s, labels)
+
+    def setSpikes(self, spkdict):
+        '''SETSPIKES - Add spike markers to the display
+        SETSPIKES(tdict), where TDICT is a dictionary mapping electrode
+        channels to vectors of spike times, adds graphical marks for those
+        spikes.'''
+        self.win.setSpikes(spkdict)
+        
+def pyphy(dat, fs_Hz, chlist=None, stims=None):
+    wdg = PyPhy()
+    wdg.setData(dat, fs_Hz, chlist)
+    if stims is not None:
+        wdg.setStimuli(stims / fs_Hz)
+    return wdg

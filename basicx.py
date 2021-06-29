@@ -118,16 +118,16 @@ def semiunflatten(y, s):
     x = np.transpose(x, perm)
     return x
 
-def detrend(x, p=1, dim=0):
+def detrend(x, p=1, axis=0):
     '''DETREND - Remove polynomial trend from data
     y = DETREND(x) removes linear trend from the data in X.
     Optional argument P can be set to 0 to only remove constant baseline or
     to an arbitrary positive integer to remove a polynomial trend.
     If X is multidimensional, DETREND works the dimension specified by
-    optional argument DIM, which defaults to 0.'''
+    optional argument AXIS, which defaults to 0.'''
 
     typ = x.dtype
-    y, s = semiflatten(x.copy(), dim)
+    y, s = semiflatten(x.copy(), axis)
     N, L = y.shape
     rng = np.arange(L,dtype=typ) - L/2
     for n in range(N):

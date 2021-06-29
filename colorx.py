@@ -6,6 +6,7 @@
 
 # Probably, all of the color maps should be moved into qp.luts
 
+from . import basicx
 import numpy as np
 
 def unshape(cc):
@@ -806,6 +807,7 @@ def bluegrayred(n=100, f=.25):
     return np.flipud(clr)
 
 def clip01(xx):
+    '''CLIP01 - Clip to range [0, 1]'''
     yy = xx.copy()
     yy[yy<0] = 0
     yy[yy>1] = 1
@@ -1089,3 +1091,39 @@ def resistor(white=False, extra=0):
         rgb.append([1, 1, 1])
     return np.array(rgb)
 
+def alphablend(base, above, coloraxis=-1):
+    '''ALPHABLEND - Perform alpha-blending
+    out = ALPHABLEND(base, over) alpha-blends the image OVER on top of
+    the image BASE. BASE and OVER must have the same shape. It is assumed
+    that the final axis of BASE and OVER is color and that the last
+    color channel represents alpha. However, if the last axis of BASE
+    has length 1 or 3, an implicit all-one alpha channel is assumed.
+    The output has the shape of ABOVE.
+    Inputs must be in the range [0, 1].'''
+    base, Sbase = basicx.semiflatten(base, coloraxis)
+    above, Sabove =  basicx.semiflatten(above, coloraxis)
+    if base.shape[-1]==1 or base.shape[-1]==3:
+        # gray or rgb: add alpha channel
+        base = np.hstack((base, np.ones((base.shape[0], 1))))
+    alphbase = base[:,-1]
+    imgbase = base[:,:-1]
+    alphabove = above[:,-1]
+    imgabove = above[:,:-1]
+    alphout = alphabove + (1-alphabove)*alphbase
+    out = np.zeros(base.shape)
+    for k in range(out.shape[-1]-1):
+        out[:,k] = (alphabove*imgabove[:,k]
+                    + (1-alphabove)*alphbase*imgbase[:,k]) / (alphout+1e-20)
+    out[:,-1] = alphout
+    out[alphout==0, :] = 0
+    return  basicx.semiunflatten(out, Sabove)
+
+def applyalpha(rgba, coloraxis=-1):
+    '''ALPHAALPHA - Applies alpha channel to RGBA image
+    rgb = APPLYALPHA(rgba) applies the alpha channel of an RGBA image,
+    resulting in an RGB image. 
+    Normally, the final axis of RGBA is assumed to be the color axis, but
+    this can be overridden. ALPHA must be in the range [0, 1].'''
+    rgba, Srgba = basicx.semiflatten(rgba, coloraxis)
+    result = rgba[:,:-1] * rgba[:,-1:]
+    return basicx.semiunflatten(result, Srgba)

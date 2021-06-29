@@ -5,12 +5,18 @@
 #include <stdint.h>
 #include <iostream>
 
+#ifdef _WIN32
+#define DECLSPEC __declspec(dllexport)
+#else
+#define DECLSPEC
+
 extern "C" {
   int foo(int x) {
     return x*x;
   }
   
-  void quickdraw(QPainter *ptr,
+
+DECLSPEC  void quickdraw(QPainter *ptr,
                  int16_t *data,
                  int N,
                  int stride,
