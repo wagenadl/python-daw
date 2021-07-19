@@ -331,6 +331,7 @@ class _EPhysView(QWidget):
         R = 3
         c1 = .5
         for c, tt in self.spikes:
+            c1 += 1
             if c<self.c0 or c >= self.c0 + self.cscale_chans:
                 continue
             xx = tt2x(tt[np.logical_and(tt>=t0, tt<t1)])
@@ -342,7 +343,6 @@ class _EPhysView(QWidget):
                 ptr.setBrush(clr)
                 for x in xx:
                     ptr.drawEllipse(QRect(x-R, y-R, 2*R, 2*R)
-                c1 += 1
 
 
 class PyPhy:
