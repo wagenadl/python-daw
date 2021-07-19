@@ -28,6 +28,7 @@ _pyphyc.quickdraw.argtypes = [ct.c_int64,
                               ct.c_int,
                               ct.c_float]
 
+
 def lastlessthan(xx, y):
     j = None
     for i in range(len(xx)):
@@ -36,11 +37,13 @@ def lastlessthan(xx, y):
         else:
             return j
 
+
 def firstgreaterthan(xx, y):
     for i in range(len(xx)):
         if xx[i]>y:
             return i
     return None
+
 
 def sensiblestep(mx):
     '''dx = SENSIBLESTEP(mx) returns a sensible step size not much smaller
@@ -340,8 +343,8 @@ class _EPhysView(QWidget):
                 for x in xx:
                     ptr.drawEllipse(QRect(x-R, y-R, 2*R, 2*R)
                 c1 += 1
-            
-            
+
+
 class PyPhy:
     app = None
     
@@ -376,13 +379,14 @@ class PyPhy:
         has the same length as TT also provides labels for the vis_stimuli.'''
         self.win.setStimuli(tt_s, labels)
 
-    def setSpikes(self, spkdict):
+    def setSpikes(self, spkmap):
         '''SETSPIKES - Add spike markers to the display
-        SETSPIKES(tdict), where TDICT is a dictionary mapping electrode
-        channels to vectors of spike times, adds graphical marks for those
-        spikes.'''
-        self.win.setSpikes(spkdict)
-        
+        SETSPIKES(spkmap), where SPKMAP is a list of (c, tt) pairs
+        containing electrode channels (C) and associated vectors of
+        spike times (TT), adds graphical marks for those spikes.'''
+        self.win.setSpikes(spkmap)
+
+
 def pyphy(dat, fs_Hz, chlist=None, stims=None):
     wdg = PyPhy()
     wdg.setData(dat, fs_Hz, chlist)

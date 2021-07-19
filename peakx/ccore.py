@@ -4,7 +4,12 @@ import numpy as np
 import ctypes as ct
 import os
 
-_ccore = np.ctypeslib.load_library('libccore', os.path.dirname(__file__))
+
+libname = 'ccore'
+if os.name=='posix':
+    libname = 'lib' + libname
+
+_ccore = np.ctypeslib.load_library(libname, os.path.dirname(__file__))
 _ccore.schmitt_double.argtypes = [ct.POINTER(ct.c_double),
                                   ct.c_uint64, ct.c_int64,
                                   ct.c_double, ct.c_double,

@@ -4,6 +4,12 @@
 #include <vector>
 #include <algorithm>
 
+#ifdef _WIN32
+  #define EXPORT __declspec(dllexport) 
+#else
+  #define EXPORT
+#endif
+
 typedef uint64_t idx_t;
 typedef int64_t stride_t;
 
@@ -32,17 +38,17 @@ template <class T> idx_t *schmitt(T const *vec, idx_t count, stride_t stride,
 }
 
 extern "C" {
-  void schmitt_free(idx_t *trans) {
+  EXPORT void schmitt_free(idx_t *trans) {
     delete [] trans;
   }
 
-  idx_t *schmitt_double(double const *vec, idx_t count, stride_t stride,
-                        double upthr, double downthr, idx_t *nout) {
+  EXPORT idx_t *schmitt_double(double const *vec, idx_t count, stride_t stride,
+                               double upthr, double downthr, idx_t *nout) {
     return schmitt<double>(vec, count, stride, upthr, downthr, nout);
   }
 
-  idx_t *schmitt_float(float const *vec, idx_t count, stride_t stride,
-                       float upthr, float downthr, idx_t *nout) {
+  EXPORT idx_t *schmitt_float(float const *vec, idx_t count, stride_t stride,
+                              float upthr, float downthr, idx_t *nout) {
     return schmitt<float>(vec, count, stride, upthr, downthr, nout);
   }
 };
