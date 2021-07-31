@@ -113,8 +113,7 @@ def fupsample(x, n, t=None, axis=0):
     On return, IDX is a real vector of pseudo-indices into X corresponding
     to the data in Y.
     y, tout = FUPSAMPLE(x, n, t), where T are time stamps, returns the time
-    stamps of the output.
-    CAUTION: if the length of X is odd, the last data point is dropped.'''
+    stamps of the output.'''
 
     x, s = basicx.semiflatten(x, axis)
     K, L = x.shape
@@ -125,13 +124,18 @@ def fupsample(x, n, t=None, axis=0):
         else:
             return basicx.semiunflatten(x, s), t
 
-    H = L//2
-    f = np.fft.fft(x[:, :2*H])
-    f = np.concatenate((f[:, :H],
-                        np.zeros((K, H*2*(n-1)), f.dtype),
-                        f[:, H:2*H]), 1)
+    f = np.fft.fft(x)
+    if n%2:
+        f = np.concatenate((f[:, :L//2], f[:, L//2:L//2+1]/2,
+                            np.zeros((K, L*(n-1)-1), f.dtype),
+                            f[:, L//2:L//2+1]/2,
+                            f[:, L//2+1:]), 1)
+    else:
+        f = np.concatenate((f[:, :L//2],
+                            np.zeros((K, L*(n-1)), f.dtype),
+                            f[:, L//2:]), 1)
     y = np.real(np.fft.ifft(f)) * n
-    idx = np.arange(2*H)/n
+    idx = np.arange(L*n)/n
     y = basicx.semiunflatten(y, s)
     if t is None:
         return y, idx
@@ -223,7 +227,7 @@ def gaussianinterp(xx, dat_x, dat_y, smo_x, err=False):
     N = len(xx)
     yy = np.zeros(xx.shape, xx.dtype)
     for n in range(N):
-        wei = np.exp(-.5*(dat_x - xx[n])**2 / smo_x**2)
+        wei = np.exp(-.5*np.abs(dat_x - xx[n])**2 / smo_x**2)
         yy[n] = np.sum(dat_y*wei) / np.sum(wei)
 
     if not err:
@@ -235,7 +239,7 @@ def gaussianinterp(xx, dat_x, dat_y, smo_x, err=False):
     bad = np.nonzero(np.isnan(s_i))
     s_i[bad] = 0
     for n in range(N):
-        wei = np.exp(-.5*(dat_x - xx[n])**2 / smo_x**2)
+        wei = np.exp(-.5*np.abs(dat_x - xx[n])**2 / smo_x**2)
         wei[bad] = 0
         wei /= np.sum(wei)
         eff_n = 1/np.max(wei)

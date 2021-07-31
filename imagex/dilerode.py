@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import skimage.morphology as morph
+import numpy as np
 
 def erode4(img):
     '''ERODE4 - Erode image with a 4-neighborhood

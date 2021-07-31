@@ -94,7 +94,7 @@ def imread(ifn, dtype=None):
     If DTYPE is not an integer type, the image is scaled from [0, K]
     (where K=255 for 8-bit images, K=65535 for 16-bit images, etc)
     to [0, 1]. Try IMREAD(ifn, float).'''
-    img = cv2.imread(ifn, cv2.IMREAD_ANYDEPTH + cv2.IMREAD_ANYCOLOR)
+    img = cv2.imread(ifn, cv2.IMREAD_UNCHANGED)
     if img is None:
         raise OSError('Could not open image file')
     if img.ndim==3:
