@@ -66,7 +66,8 @@ def detectspikes(yy, threshold, polarity=0, tkill=50):
         if tkill is not None:
             ipk = droptoonear(ipk, yy[ipk], tkill)
     else:
-        ipk = np.array([], dtype=iup.dtype)
+        ipk = None   
+
     if polarity<=0:
         zz = -yy
         iup, idn = peakx.schmitt(zz, threshold, 0)
@@ -74,9 +75,14 @@ def detectspikes(yy, threshold, polarity=0, tkill=50):
         if tkill is not None:
             itr = droptoonear(itr, zz[itr], tkill)
     else:
-        itr = np.array([], dtype=iup.dtype)
+        itr = None
 
-    return np.sort(np.append(ipk, itr))
+    if ipk is None:
+        return itr
+    elif itr is None:
+        return ipk
+    else:
+        return np.sort(np.append(ipk, itr))
 
 def cleancontext(idx, dat, test=(np.arange(-25,-12), np.arange(12,25)),
                  testabs=(np.arange(-25,-4), np.arange(4,25)),
