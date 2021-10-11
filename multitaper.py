@@ -3,6 +3,7 @@
 
 import numpy as np
 from scipy.signal.windows import dpss
+import matplotlib.pyplot as plt
 
 def sum_pos_neg_freqs_(Pxxs_ts):
     '''turns a two-sided PSD into a one-sided
@@ -32,12 +33,12 @@ def sum_pos_neg_freqs_(Pxxs_ts):
     return Pxxs_os, f_os
         
 
-def pds(x, f_s, f_res=None, nw=None, indiv=False):
+def psd(x, f_s=1, f_res=None, nw=None, indiv=False):
     '''This is DW's adaptation of Adam Taylor's PDS_MTM code
-    ff, Pxx = PDS(xx, f_s, f_res) calculates one-side multi-taper
+    ff, Pxx = PSD(xx, f_s, f_res) calculates one-side multi-taper
     spectrogram.
     
-      XX [TxD] is the (optical) data.
+      XX [TxD] is the data.
       F_S is the sampling rate.
       F_RES is the half-width of the transform of the tapers used.
     
@@ -51,7 +52,16 @@ def pds(x, f_s, f_res=None, nw=None, indiv=False):
     standardized half bandwidth to DPSS directly.
     
     Note that the nature of the beast is that the output Pxx has a 
-    full width of 2*F_RES even if the signal XX is perfectly sinusoidal.'''
+    full width of 2*F_RES even if the signal XX is perfectly sinusoidal.
+
+    PXX is normalized such that the sum over all frequencies of PXX is T
+    for a gaussian random noise signal with variance 1 (on average).
+    This is different from the convention of WELCH, for which the output
+    is scales with its NPERSEG parameter. As a further example, if
+    the input signal is cos(ωt) for some frequency ω, the sum of the
+    PXX values is T/2. This does not depend on sample frequency, as long
+    as ω >> 1/T and ω << f_s.
+    '''
 
     if len(x.shape)==1:
         isvec = True
@@ -63,24 +73,30 @@ def pds(x, f_s, f_res=None, nw=None, indiv=False):
     N_fft = int(2**np.ceil(np.log2(N)))
     dt = 1/f_s
     if nw is None:
-        nw = N*dt*f_res
+        if f_res is None:
+             raise ValueError("Either F_RES or NW should be given")
+        else:
+            nw = N*dt*f_res
     else:
-        if f_res is not None:
-            raise ValueError("Either F_RES or NW (but not both) should be given")
+        if f_res is None:
+            f_res = nw / (N*dt)
+        else:
+            raise ValueError("Only one of F_RES or NW should be given")
     K = int(2*nw-1)
-    tapers = dpss(N,nw,K, False).T.reshape(N,1,K)
+    tapers, ratios = dpss(N, nw, K, sym=False, return_ratios=True)
+    tapers = tapers.T.reshape(N,1,K)
     
     x_tapered = x.reshape(N,D,1) * tapers
     X = np.fft.fft(x_tapered, N_fft, axis=0)
     
-    Pxxs = np.abs(X)**2 / f_s
+    Pxxs = np.abs(X)**2 / N_fft * N 
     Pxxs, f = sum_pos_neg_freqs_(Pxxs)
     f = f_s*f
 
     if indiv:
         if isvec:
             Pxxs = Pxxs[:,0,:]
-        return f, Pxxs
+        return f, Pxxs, (f_res, nw, K, ratios)
     else:
         Pxx = np.mean(Pxxs, 2)
         if isvec:
