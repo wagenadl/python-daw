@@ -6,6 +6,7 @@ from scipy.signal.windows import dpss
 import matplotlib.pyplot as plt
 from scipy.stats import gamma
 
+
 def sum_pos_neg_freqs_(Pxxs_ts):
     '''turns a two-sided PSD into a one-sided
     works on the the cols of Pxx_ts
@@ -86,7 +87,7 @@ def mtpsd(x, f_s=1, f_res=None, nw=None, indiv=False):
     K = int(2*nw-1)
     tapers, ratios = dpss(N, nw, K, sym=False, return_ratios=True)
     tapers = tapers.T.reshape(N,1,K)
-        
+
     x_tapered = x.reshape(N,D,1) * tapers
     X = np.fft.fft(x_tapered, N_fft, axis=0)
     

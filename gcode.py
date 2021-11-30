@@ -80,10 +80,16 @@ def probez_at(x_mm, y_mm, z_mm, zsafe_mm=100, dz_mm=25):
     dz = abs(dz_mm)
     s = preamble(10)
     s += f'''
+G103 P1
+
+    
 G0 {X(x_mm)} {Y(y_mm)}    
 G0 {Z(z_mm + zsafe_mm)}
 G65 P9832
 G65 P9810 {Z(z_mm + dz/2)} {F(20)}
+G103
+
+    
 '''
     s += probez(dz_mm)
     return s

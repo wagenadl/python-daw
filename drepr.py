@@ -37,7 +37,7 @@ def ol_summary(pfx, ss, bo, bc, sfx='', countrest=True, quote=True):
         if luse + 2 + len(s) + len(pfx) + len(sfx) + 6 < linelen:
             use.append(s)
             luse += 2 + len(s)
-        elif luse==0:
+        elif luse==0 and quote:
             use = ol_typesummary(pfx, ss, sfx)
             break
     if len(use) < len(ss):
@@ -236,11 +236,11 @@ def d_nd_array(name, x):
         if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
             res.append(ol_summary('  ',
                                   [f'{v:.4g}' for v in x.flat],
-                                  '', ''))
+                                  '', '', quote=False))
         else:
             res.append(ol_summary('  ',
                                   [str(v) for v in x.flat],
-                                  '', ''))
+                                  '', '', quote=False))
     elif x.ndim==1 or N==np.max(x.shape): # vector
         K = min(10, N)
         if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:

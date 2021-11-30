@@ -162,6 +162,44 @@ class Struct:
             flds = '\n  '.join(self.fieldnames())
             return f'({dims}) struct array containing:\n  ' + flds
 
+    def asdict(self, deep=False, keepscalarasarray=False):
+        '''ASDICT - Convert Struct to dict
+        ASDICT() returns the (scalar) struct as a dictionary. If the Struct
+        is a struct array, the result is an array of dicts.
+        Optional argument DEEP specifies that substructures are to be
+        converted as well (inside cells as well).
+        Optional argument KEEPSCALARASARRAY returns a (shapeless) array
+        if the input is a scalar.'''
+        if deep:
+            def deStruct(x):
+                if type(x)==type(self):
+                    return x.asdict(deep=deep,
+                                    keepscalarasarray=keepscalarasarray)
+                elif type(x)==np.ndarray and x.dtype==np.object:
+                   N = len(x.flat)
+                   y = np.ndarray(x.shape, np.object)
+                   for n in range(N):
+                       y.flat[n] = deStruct(x.flat[n])
+                   return y
+                else:
+                    return x
+        else:
+            def deStruct(x):
+                return x
+
+        res = np.ndarray(self.shape(), np.object)
+        N = len(self._contents_.flat)
+        for n in range(N):
+            res.flat[n] = { k: deStruct(v)
+                            for k,v in self._contents_.flat[n].items()
+                            if k!='__class__' }
+        if N==1 and not keepscalarasarray:
+            res = res.flat[0]
+        return res
+                     
+
+        
+
 def _pythonify_matrix(v):
     if v.ndim==2:
         # Convert 1x1 to scalar and 1xN, Nx1 to vector
