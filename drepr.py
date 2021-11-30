@@ -3,6 +3,8 @@
 import numpy as np
 import inspect
 import numbers
+from collections import namedtuple
+
 try:
     import daw.octfile
     haveoct = True
@@ -13,28 +15,59 @@ except:
 linelen = 70
 maxlines = 15
 
-def ol_summary(pfx, ss, bo, bc, sfx='', countrest=True):
+def ol_typesummary(pfx, ss, sfx):
     use = []
     luse = 0
     for s in ss:
-        if luse==0 or (luse + 2 + len(s) + len(pfx) + len(sfx) + 6 < linelen):
-            use.append(s)
-            luse += 2 + len(s) 
+        if type(s)==np.ndarray:
+            s = f"ndarray[{','.join([f'{k}' for k in s.shape])}]"
         else:
+            s = type(s).__name__
+        if luse==0 or luse + 2 + len(s) + len(pfx) + len(sfx) + 6 < linelen:
+            use.append(s)
+            luse += 2 + len(s)
+    return use
+
+def ol_summary(pfx, ss, bo, bc, sfx='', countrest=True, quote=True):
+    use = []
+    luse = 0
+    for s in ss:
+        if quote:
+            s = repr(s)
+        if luse + 2 + len(s) + len(pfx) + len(sfx) + 6 < linelen:
+            use.append(s)
+            luse += 2 + len(s)
+        elif luse==0 and quote:
+            use = ol_typesummary(pfx, ss, sfx)
             break
     if len(use) < len(ss):
         if countrest:
-            #use.append(f'... (+{len(ss)-len(use)})')
-            use.append(f'... (𝘯={len(ss)})')
+            #use.append(f'… (+{len(ss)-len(use)})')
+            use.append(f'… ｟𝘯={len(ss)}｠')
         else:
-            use.append(f'...')
+            use.append(f'…')
     return f'{pfx} {bo} {", ".join(use)} {bc} {sfx}'
 
 
 def ol_dict(pfx, x):
     lst = list(x.keys())
     lst.sort()
-    return ol_summary(pfx, lst, '{', '}')
+    s = ""
+    infix = ""
+    for k in lst:
+        s += infix
+        s += repr(k) + ": "
+        if isinstance(x[k], numbers.Number):
+            s += repr(x[k])
+        else:
+            s += f"«{type(x[k]).__name__}»"
+        infix = ", "
+        if len(s) > linelen:
+            break
+    if len(s) < linelen-10:
+        return pfx + " { " + s + "}"
+    else:
+        return ol_summary(pfx, lst, '{', '} «dict»')
 
 def ol_struct(pfx, x):
     lst = list(x.keys())
@@ -42,10 +75,10 @@ def ol_struct(pfx, x):
     return ol_summary(pfx, lst, '{', '} «struct»')
 
 def ol_tuple(pfx, x):
-    return ol_summary(pfx, [str(v) for v in x], '(', ')')
+    return ol_summary(pfx, x, '(', ')')
 
 def ol_list(pfx, x):
-    return ol_summary(pfx, [str(v) for v in x], '[', ']')
+    return ol_summary(pfx, x, '[', ']')
 
 def ol_nd_array(pfx, x):
     N = np.prod(x.shape)
@@ -55,16 +88,16 @@ def ol_nd_array(pfx, x):
         N = min(10, N)
         if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
             return ol_summary(pfx, [f'{v:.4g}' for v in x.flat], '[', ']', shp,
-                              countrest=False)
+                              countrest=False, quote=False)
         else:            
             return ol_summary(pfx, [str(v) for v in x.flat], '[', ']', shp,
-                              countrest=False)
+                              countrest=False, quote=False)
     else:
         return pfx + ' ' + shp
 
 def ol_string(pfx, x):
     if len(x) + len(pfx)> linelen:
-        return f'{pfx} "{x[:linelen-10-len(pfx)]}..." [{len(x)}]'
+        return f'{pfx} "{x[:linelen-10-len(pfx)]}…" [{len(x)}]'
     else:
         return f'{pfx} "{x}"'
         
@@ -108,7 +141,7 @@ def d_struct(name, x):
             if n >= maxlines:
                 break
         if n < len(x):
-            res.append(f'  ...')
+            res.append(f'  …')
             res.append(f'  ({len(x)} total items)')
         return "\n".join(res)
     else:
@@ -125,12 +158,24 @@ def d_dict(name, x):
     res = [f'{name} = «dict with {kk}»:']
     n = 0
     for k,v in x.items():
-        res.append(oneline(f'  {k}:', v))
+        res.append(oneline(f'  {repr(k)}:', v))
         n += 1
         if n >= maxlines:
             break
     if n < len(x):
-        res.append(f'  ...')
+        res.append(f'  …')
+    return "\n".join(res)
+
+def d_namedtuple(name, x):
+    res = [f'{name} = «named tuple with {len(x)} fields»:']
+    n = 0
+    for k, f in enumerate(x._fields):
+        res.append(oneline(f"  {f}: ", x[k]))
+        n += 1
+        if n >= maxlines:
+            break
+    if n < len(x):
+        res.append('  …')
     return "\n".join(res)
 
 def d_tuple(name, x):
@@ -142,7 +187,7 @@ def d_tuple(name, x):
         if n >= maxlines:
             break
     if n < len(x):
-        res.append(f'  ...')
+        res.append(f'  …')
     return "\n".join(res)
 
 def d_list(name, x, typ='list'):
@@ -155,12 +200,12 @@ def d_list(name, x, typ='list'):
         if n>=N:
             break
     if N<len(x):
-        res.append(f'  ...')
+        res.append(f'  …')
     return "\n".join(res)
 
 def d_string(name, x):
     if len(x) > linelen - len(name):
-        return f'{name} = "{x:linelen - len(name) - 10}..." [{len(x)}]'
+        return f'{name} = "{x:linelen - len(name) - 10}…" [{len(x)}]'
     else:
         return f'{name} = "{x}"'
 
@@ -191,21 +236,21 @@ def d_nd_array(name, x):
         if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
             res.append(ol_summary('  ',
                                   [f'{v:.4g}' for v in x.flat],
-                                  '', ''))
+                                  '', '', quote=False))
         else:
             res.append(ol_summary('  ',
                                   [str(v) for v in x.flat],
-                                  '', ''))
+                                  '', '', quote=False))
     elif x.ndim==1 or N==np.max(x.shape): # vector
         K = min(10, N)
         if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
             res.append(ol_summary('  ',
                                   [f'{v:.4g}' for v in x.flat[:K]],
-                                  '[', ']'))
+                                  '[', ']', countrest=False, quote=False))
         else:
             res.append(ol_summary('  ',
                                   [str(v) for v in x.flat[:K]],
-                                  '[', ']'))
+                                  '[', ']', countrest=False, quote=False))
     elif x.ndim==2:
         N = min(10, x.shape[0])
         M = min(7, x.shape[1])
@@ -222,22 +267,22 @@ def d_nd_array(name, x):
                 for m in range(M):
                     res1 += f' {x[n,m]}'
             if M<x.shape[1]:
-                res1 += ' ...'
+                res1 += ' …'
             res1 += ' ]'
             res.append(res1)
         if x.shape[0] > N:
             res1 = '  ['
             if x.dtype==np.float32 or x.dtype==np.float64:
                 for m in range(M):
-                    res1 += '       ...'
+                    res1 += '       …'
             elif x.dtype==np.complex:
                 M = min(4, M)
                 for m in range(M):
-                    res1 += '              ...'
+                    res1 += '              …'
             else:
-                res1 += ' ...'
+                res1 += ' …'
             if M<x.shape[1]:
-                res1 += ' ...'
+                res1 += ' …'
             res1 += ' ]'
             res.append(res1)
     return "\n".join(res)
@@ -252,6 +297,18 @@ def _getname():
     name = s[sol:eol]
     return name
 
+def isnamedtuple(x):
+    if not isinstance(x, tuple):
+        return False
+    t = type(x)
+    f = getattr(t, '_fields', None)
+    if not isinstance(f, tuple):
+        return False
+    for name in f:
+        if type(name) != str:
+            return False
+    return True
+
 def d_any(x, name):
     t = type(x)
     if t==dict:
@@ -260,6 +317,8 @@ def d_any(x, name):
         return d_struct(name, x)
     elif t==tuple:
         return d_tuple(name, x)
+    elif isnamedtuple(x):
+        return d_namedtuple(name, x)
     elif t==list:
         return d_list(name, x)
     elif t==type({}.keys()):
