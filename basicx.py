@@ -101,7 +101,7 @@ def semiflatten(x, d=0):
     perm.pop(d)
     perm.append(d)
     y = np.transpose(x, perm)
-    # Y has the original D-th axis first, followed by the other axes, in order
+    # Y has the original D-th axis last, preceded by the other axes, in order
     rest = np.array(shp, int)[perm[:-1]]
     y = np.reshape(y, [np.prod(rest), y.shape[-1]])
     return y, (d, rest)

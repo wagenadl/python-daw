@@ -4,6 +4,7 @@
 import numpy as np
 from scipy.signal.windows import dpss
 import matplotlib.pyplot as plt
+from scipy.stats import gamma
 
 def sum_pos_neg_freqs_(Pxxs_ts):
     '''turns a two-sided PSD into a one-sided
@@ -18,24 +19,24 @@ def sum_pos_neg_freqs_(Pxxs_ts):
     # also, generate frequency base
     hpfi = int(np.ceil(N/2))
     if N % 2 == 0: # if N_fft is even
-      Pxxs_os1 = np.concatenate((Pxxs_ts[:hpfi,:,:],
-                                np.zeros((1,N_signals,K))), 0)
-      Pxxs_os2 = np.concatenate((np.zeros((1,N_signals,K)),
-                                 np.flip(Pxxs_ts[hpfi:,:,:], axis=0)), 0)
-      Pxxs_os = Pxxs_os1 + Pxxs_os2
-      f_os = np.arange(hpfi+1) / N
+        Pxxs_os1 = np.concatenate((Pxxs_ts[:hpfi,:,:],
+                                   np.zeros((1,N_signals,K))), 0)
+        Pxxs_os2 = np.concatenate((np.zeros((1,N_signals,K)),
+                                   np.flip(Pxxs_ts[hpfi:,:,:], axis=0)), 0)
+        Pxxs_os = Pxxs_os1 + Pxxs_os2
+        f_os = np.arange(hpfi+1) / N
     else:
-      Pxxs_os1 = Pxxs_ts[:hpfi,:,:]
-      Pxxs_os2 = np.concatenate((np.zeros((1,N_signals,K)),
-                                 np.flip(Pxxs_ts[hpfi:,:,:], axis=0)), 0)
-      Pxxs_os =  Pxxs_os1 + Pxxs_os2
-      f_os = np.arange(hpfi) / N
+        Pxxs_os1 = Pxxs_ts[:hpfi,:,:]
+        Pxxs_os2 = np.concatenate((np.zeros((1,N_signals,K)),
+                                   np.flip(Pxxs_ts[hpfi:,:,:], axis=0)), 0)
+        Pxxs_os =  Pxxs_os1 + Pxxs_os2
+        f_os = np.arange(hpfi) / N
     return Pxxs_os, f_os
-        
 
-def psd(x, f_s=1, f_res=None, nw=None, indiv=False):
+
+def mtpsd(x, f_s=1, f_res=None, nw=None, indiv=False):
     '''This is DW's adaptation of Adam Taylor's PDS_MTM code
-    ff, Pxx = PSD(xx, f_s, f_res) calculates one-side multi-taper
+    ff, Pxx = MTPSD(xx, f_s, f_res) calculates one-side multi-taper
     spectrogram.
     
       XX [TxD] is the data.
@@ -85,7 +86,7 @@ def psd(x, f_s=1, f_res=None, nw=None, indiv=False):
     K = int(2*nw-1)
     tapers, ratios = dpss(N, nw, K, sym=False, return_ratios=True)
     tapers = tapers.T.reshape(N,1,K)
-    
+        
     x_tapered = x.reshape(N,D,1) * tapers
     X = np.fft.fft(x_tapered, N_fft, axis=0)
     
@@ -103,9 +104,37 @@ def psd(x, f_s=1, f_res=None, nw=None, indiv=False):
             Pxx = Pxx[:,0]
         return f, Pxx
 
-def coh(x_ref, _sig, f_s, f_res=None, nw=None):
+def mtpsd_ci(x, f_s=1, f_res=None, nw=None, pp=[.16, .84]):
+    try:
+        iter(pp)
+    except:
+        if pp>.5:
+            pp = 1 - pp
+        pp = [pp/2, 1-pp/2]
+
+    ff, pxxs, (f_res, nw, K, ratios) = mtpsd(x, f_s, f_res, nw, indiv=True)
+    pxx = pxxs.mean(-1)
+        
+    if len(pxxs.shape)==2:
+        isvec = True
+        F = pxxs.shape[0]
+        pxxs = pxxs.reshape(F,1,K)
+    else:
+        isvec = False
+
+    F, R, K = pxxs.shape
+    pdfss = [ [ gamma.fit(pxxs[f,r,:], floc=0) for r in range(R) ]
+             for f in range(F) ]
+    lims = [ [ gamma.ppf(pp, a*K, 0, w/K) for a,_,w in pdfs ]
+             for pdfs in pdfss ]
+    lims = np.array(lims)
+    if isvec:
+        lims = lims[:,0,:]
+    return ff, pxx, lims
+
+def mtcoh(x_ref, _sig, f_s, f_res=None, nw=None):
     '''Not yet implemented. See vscope_coherence'''
     pass
 
-def coh_ci(x_ref, _sig, f_s, f_res=None, nw=None, ci=1):
+def mtcoh_ci(x_ref, _sig, f_s, f_res=None, nw=None, ci=1):
     pass
