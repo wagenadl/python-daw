@@ -74,38 +74,70 @@ def bs_resample(x, dim=0):
     return basicx.semiunflatten(y, s)
 
 
-def tukeyLetters(pp, means, alpha=0.05):
-    ordr = np.argsort(means)
-    lvlmat = pp[ordr][:, ordr]
-    connected = lvlmat > alpha
-    nextletter = 0
-    G = len(means)
-    assigned = [[] for g in range(G)]
-    y = 0
-    x = 0
-    while x<G:
-        row = connected[y,x:]
-        x1 = x + np.sum(row)
-        print(x, y, x1)
-        for x_ in range(0, x):
-            if connected[x_,x]:
-                assigned[x_].append(nextletter)
-        for x_ in range(x, x1):
-            assigned[x_].append(nextletter)        
-        for x_ in range(x1,G):
-            if connected[y,x_]:
-                assigned[x_].append(nextletter)
-        nextletter += 1
-        if x1<G:
-            while not connected[y,x1]:
-                y += 1
-        x = x1
+def tukeyLetters(pp, means=None, alpha=0.05):
+    '''TUKEYLETTERS - Produce list of group labels for TukeyHSD
+    letters = TUKEYLETTERS(pp), where PP is a symmetric matrix of 
+    probabilities from a Tukey test, returns alphabetic labels
+    for each group to indicate clustering. PP may also be a vector
+    from PAIRWISE_TUKEYHSD.
+    Optional argument MEANS specifies group means, which is used for
+    ordering the letters. ("a" gets assigned to the group with lowest
+    mean.) Without this argument, ordering is arbitrary.
+    Optional argument ALPHA specifies cutoff for treating groups as
+    part of the same cluster.'''
 
-    letters = [None for g in range(G)]
+    if len(pp.shape)==1:
+        # vector
+        G = int(3 + np.sqrt(9 - 4*(2-len(pp))))//2
+        ppp = .5*np.eye(G)
+        ppp[np.triu_indices(G,1)] = pp    
+        pp = ppp + ppp.T
+    conn = pp>alpha
+    G = len(conn)
+    if np.all(conn):
+        return ['a' for g in range(G)]
+    conns = []
+    for g1 in range(G):
+        for g2 in range(g1+1,G):
+            if conn[g1,g2]:
+                conns.append((g1,g2))
+
+    letters = [ [] for g in range(G) ]
+    nextletter = 0
     for g in range(G):
-        letters[ordr[g]] = ''.join([chr(97 + a) for a in assigned[g]])
-    return letters
-    
+        if np.sum(conn[g,:])==1:
+            letters[g].append(nextletter)
+            nextletter += 1
+    while len(conns):
+        grp = set(conns.pop(0))
+        for g in range(G):
+            if all(conn[g, np.sort(list(grp))]):
+                grp.add(g)
+        for g in grp:
+            letters[g].append(nextletter)
+        for g in grp:
+            for h in grp:
+                if (g,h) in conns:
+                    conns.remove((g,h))
+        nextletter += 1
+
+    if means is None:
+        means = np.arange(G)
+    means = np.array(means)
+    groupmeans = []
+    for k in range(nextletter):
+        ingroup = [g for g in range(G) if k in letters[g]]
+        groupmeans.append(means[np.array(ingroup)].mean())
+    ordr = np.empty(nextletter, int)
+    ordr[np.argsort(groupmeans)] = np.arange(nextletter)
+    result = []
+    for ltr in letters:
+        lst = [chr(97 + ordr[x]) for x in ltr]
+        lst.sort()
+        result.append(''.join(lst))
+    return result    
+
+
 def tukeyHSD(groupdata, alpha=0.05):
     '''TUKEYHSD - Perform Tukey's Honestly Significant Differences test
     pp, letters = TUKEYHSD(groupdata), where GROUPDATA is a list of 
@@ -160,6 +192,6 @@ def games_howellHSD(groupdata, alpha=0.05):
             qq[g1,g2] = qq[g2,g1] = np.abs(means[g1] - means[g2]) / err
             df = (v1 + v2)**2 / (v1**2/(n1-1) + v2**2/(n2-1))
             pp[g1,g2] = pp[g2,g1] = 1 - studentized_range.cdf(qq[g1, g2],G,df)
-    #letters = tukeyLetters(pp, means, alpha)
-    return pp#, letters
+    letters = tukeyLetters(pp, means, alpha)
+    return pp, letters
     
