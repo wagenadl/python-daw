@@ -40,6 +40,8 @@ def ol_summary(pfx, ss, bo, bc, sfx='', countrest=True, quote=True):
         elif luse==0 and quote:
             use = ol_typesummary(pfx, ss, sfx)
             break
+        else:
+            break
     if len(use) < len(ss):
         if countrest:
             #use.append(f'… (+{len(ss)-len(use)})')
@@ -205,7 +207,8 @@ def d_list(name, x, typ='list'):
 
 def d_string(name, x):
     if len(x) > linelen - len(name):
-        return f'{name} = "{x:linelen - len(name) - 10}…" [{len(x)}]'
+        y = x[:linelen - len(name) - 10]
+        return f'{name} = "{y}…" [{len(x)}]'
     else:
         return f'{name} = "{x}"'
 

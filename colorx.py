@@ -189,29 +189,29 @@ def hcltolinearrgb(cc, gamma=10):
     B[idx] = min_[idx] 
     G[idx] = (R[idx]*t + B[idx]) / (1+t)
     
-    idx = np.logical_and(H>pi/3, H<=2*pi/3)
+    idx = np.logical_and(H>np.pi/3, H<=2*np.pi/3)
     B[idx] = min_[idx]
-    t = tan(3*(H[idx]-pi)/4)
+    t = np.tan(3*(H[idx]-np.pi)/4)
     R[idx] = (G[idx]*(1+t) - B[idx]) / t
     
-    idx = H>2*pi/3
+    idx = H>2*np.pi/3
     R[idx] = min_[idx]
-    t = tan(3*(H[idx]-pi)/4)
+    t = np.tan(3*(H[idx]-np.pi)/4)
     B[idx] = G[idx]*(1+t) - R[idx]*t
     
-    idx = np.logical_and(H>=-pi/3, H<0)
+    idx = np.logical_and(H>=-np.pi/3, H<0)
     G[idx] = min_[idx]
-    t = tan(3*H[idx]/4)
+    t = np.tan(3*H[idx]/4)
     B[idx] = G[idx]*(1+t) - R[idx]*t
     
-    idx = np.logical_and(H>=-2*pi/3, H<-pi/3)
+    idx = np.logical_and(H>=-2*np.pi/3, H<-np.pi/3)
     G[idx] = min_[idx]
-    t = tan(3*H[idx]/4)
+    t = np.tan(3*H[idx]/4)
     R[idx] = (G[idx]*(1+t) - B[idx]) / t
     
-    idx = H<-2*pi/3
+    idx = H<-2*np.pi/3
     R[idx] = min_[idx]
-    t = tan(3*(H[idx]+pi)/2)
+    t = np.tan(3*(H[idx]+np.pi)/2)
     G[idx] = (R[idx]*t + B[idx]) / (1+t)
     cc[:,0] = R
     cc[:,1] = G
@@ -235,7 +235,6 @@ def linearrgbtociexyz(cc):
     The conversion here is based on http://en.wikipedia.org/wiki/SRGB'''
 
     (cc, S) = unshape(cc)
-    print(cc.shape, rgbxyz_.shape)
     cc1 = np.matmul(cc, rgbxyz_)
     return reshape(cc1, S)
 
@@ -374,9 +373,9 @@ def cieluvtolshuv(cc):
     #% Equations taken from http://en.wikipedia.org/wiki/CIELUV and
     #% http://en.wikipedia.org/wiki/Colorfulness#Saturation
 
-    cc = cielabtocielsh(cc)
+    cc = cielabtocielch(cc)
     cc, S = unshape(cc)
-    cc[:,2] /= cc[:,1]
+    cc[:,1] /= cc[:,0]
     return reshape(cc, S)
 
 def ciexyztolinearrgb(cc, clip=1):
@@ -1127,3 +1126,172 @@ def applyalpha(rgba, coloraxis=-1):
     rgba, Srgba = basicx.semiflatten(rgba, coloraxis)
     result = rgba[:,:-1] * rgba[:,-1:]
     return basicx.semiunflatten(result, Srgba)
+
+
+def _adjusthue(ll, l0, dl, sc):
+    dL = 1 - sc*(np.exp(-((ll-l0)/dl)**2)
+                 +np.exp(-((ll-360-l0)/dl)**2)
+                 +np.exp(-((ll+360-l0)/dl)**2))
+    ll = np.cumsum(dL)
+    ll = 360*ll/ll[-1]
+    idx = np.argmax(ll>=l0)
+    ll = ll - ll[idx]
+    ll = ll + l0
+    ll = np.mod(ll, 360)
+    return ll
+
+
+def _interp1(x, y, xi):
+    y, S = basicx.semiflatten(y, 0)
+    y = y.T
+    N,C = y.shape
+    K, = xi.shape
+    print(x.shape, y.shape, xi.shape)
+    y1 = np.zeros((K,C))
+    for c in range(C):
+        y1[:,c] = np.interp(xi, x, y[:,c])
+    return basicx.semiunflatten(y1.T, S)
+
+
+def dhsv(N=64):
+    '''DHSV - Alternative HSV colormap with better perceptual uniformity
+    cc = DHSV(N) returns a more perceptually uniform cyclic colormap
+    with N entries. (N defaults to 64).'''
+
+    on = np.ones(N)
+    of = np.zeros(N)
+    up = .5*(.5-.5*np.cos(np.arange(.5,N)/N * np.pi)) + .5*(np.arange(.5,N)/N)
+    dn = np.flip(up)
+    rgb0 = np.concatenate([np.stack([on,up,of],1),
+                           np.stack([dn,on,of],1),
+                           np.stack([of,on,up],1),
+                           np.stack([of,dn,on],1),
+                           np.stack([up,of,on],1),
+                           np.stack([on,of,dn],1)], 0)
+    L,C = rgb0.shape
+
+    l0=np.arange(L)*360/L
+    ll = l0
+    ll = _adjusthue(ll, 320, 30, -0.8)
+    rgb0 = _interp1(l0, rgb0, ll)
+    ll = _adjusthue(ll, 240, 60, 0.45)
+    rgb0 = _interp1(l0, rgb0, ll)
+    ll = _adjusthue(ll, 245, 25, 0.35)
+    rgb0 = _interp1(l0, rgb0, ll)
+    ll = np.mod(_adjusthue(np.mod(ll-180, 360), 180, 30, 0.65), 360)
+    rgb0 = _interp1(l0, rgb0, ll)
+
+    rgb0 = _interp1(l0, rgb0, np.arange(.5,N)*360/N)
+
+    cc = colorconvert(rgb0, 'linearrgb', 'srgb', clip=1)
+    return cc
+
+def lut2d(H=360, C=100):
+    '''LUT2D - Perceptually uniform 2d LUT for representing coherences
+    lut = LUT2D(H, C) returns a HxCx3 color table for representing
+    complex numbers |z| <= 1. The H axis (by default: 360 values) represents
+    the angle of the number, the C axis (by default: 100 values) represents
+    the radius. The radius is represented as chroma (saturation), whereas
+    the angle is represented as hue.
+    The map is acceptably uniform, though problems persist in the red portion
+    of the color space.'''
+
+
+    def vonmises(xx, k):
+        return np.exp(k*np.cos(xx))/np.exp(k)
+
+    def expo(xx, r):
+        return vonmises(xx, 1/r)
+    
+    hue = np.arange(H).reshape(H,1)*np.pi/180
+    chroma = np.arange(C).reshape(1,C)/C
+    lightness = np.arange(C).reshape(1,C)*0 + 65 \
+        + 10*chroma*expo(hue-1.3,.25) \
+        - 10*chroma*expo(hue-4.5,.25)
+    chroma = chroma ** (1. - .3*expo(hue-4.4,.7)
+                        - .4*expo(hue-1.3,.7)
+                        + .2*expo(hue-5.5,.5)
+                        + .2*expo(hue-.2,.7)) * 1.5 \
+                        * (1 - .3*expo(hue - 3.3, .7) -.2*expo(hue-5.5,.5))
+    hue = hue + .6*expo(hue-3.7, .7)
+    hue = hue - .6*expo(hue-5.3, .9)
+    hue = hue + .6*expo(hue-.5, .8)
+    chroma = chroma * (1+.9*expo(hue - 4.45, .35))
+    chroma = chroma ** (1-.2*expo(hue - 4.45, .35))
+    hue = hue - .2*expo(hue-5.3, .4)
+    hue = hue + .3*expo(hue-3.5, .7)
+    chroma = chroma ** (1 - .35*expo(hue - 3.3,.7))
+    chroma = chroma * (1 - .15*expo(hue-5.4,.5))
+    chroma = chroma ** (1 - .1*expo(hue-5.4,.5))
+    hue = hue + .15*expo(hue-3.6, .5)
+    lch = np.stack((lightness+0*hue, chroma+0*hue, hue+0*chroma), 2)
+    
+    rgb = colorconvert(lch, 'lshuv', 'srgb', clip=1)
+    return rgb
+
+
+def lut2dlight(H=360, K=100):
+    def vonmises(xx, k):
+        return np.exp(k*np.cos(xx))/np.exp(k)
+
+    def expo(xx, x0, r):
+        return vonmises(xx - x0*np.pi/180, 1/(r*np.pi/180))
+
+    def shift(xx, x0, a, r):
+        yy = vonmises(xx - x0*np.pi/180, 1/(r*np.pi/180))
+        dydx = np.abs(np.max(np.diff(yy, axis=0) / np.diff(xx, axis=0)))
+        return yy*a/dydx
+
+    def cexp(xx, x0, a, r):
+        yy = a*np.exp(-.5*(xx-x0)**2/r**2)
+        return yy
+    
+    hh = np.arange(H).reshape(H,1)*360/H * np.pi/180
+    hue = hh
+    cc = np.arange(K).reshape(1,K)/K
+    chroma = cc**1.5
+    chroma = chroma * (1 + .5*expo(hh, 240, 15))
+    chroma = chroma ** (1 - .1*expo(hh, 235, 25))
+    chroma = chroma ** (1 - .2*expo(hh, 205, 25))
+    chroma = chroma ** (1 - .3*expo(hh, 475, 25))
+    chroma = chroma ** (1 - .1*expo(hh, 375, 25))
+    chroma = chroma ** (1 - .15*expo(hh, 430, 25))
+    chroma = chroma ** (1 - .1*expo(hh, 300, 75))
+    chroma = chroma * (1 + .4*expo(hh, 409, 25))
+    chroma = chroma * (1 + .3*expo(hh, 469, 25))
+    ll = np.zeros((1,K)) + 65
+    lightness = 99 - 45*cc
+    lightness = lightness * (1+.2*cc*expo(hh, 410, 25))
+    lightness = lightness * (1-.2*cc**.5*expo(hh, 580, 25))
+    #lightness = 100*(.01*lightness) ** (1+.02*expo(hh, 280, 25))
+    hue = hue + shift(hh, 350, .1, 25)
+    hue = hue + shift(hh, 230, .3, 20)
+    hue = hue - shift(hh, 275, .2, 30)
+    hue = hue + shift(hh, 390, .4, 15)
+    hue = hue - shift(hh, 350, .05, 100)
+    chroma = chroma * (1 + .2*expo(hh, 280, 15))
+    chroma = chroma ** (1 - .3*expo(hh, 275, 25))
+    chroma = chroma ** (1 - .2*expo(hh, 180, 25))
+    chroma = chroma ** (1 - .2*expo(hh, 370, 25))
+    hue = hue + cexp(cc, 1, 1, .2)*shift(hh, 270, .15, 20)
+    hue = hue - cexp(cc, 1, 1, .2)*shift(hh, 460, .2, 20)
+    chroma = chroma * (1 + .4*expo(hh, 267, 10))
+    chroma = chroma ** (1 - .25*expo(hh, 262, 10))
+    hue = hue - cexp(cc, 0, 1, .2)*shift(hh, 260, .3, 25)
+    hue = hue - cexp(cc, .25, 1, .2)*shift(hh, 270, .1, 20)
+    chroma = chroma ** (1 + .25*expo(hh, 245, 15))
+    chroma = chroma ** (1 - .25*expo(hh, 275, 10))
+    chroma = chroma ** (1 - .15*expo(hh, 207, 15))
+    chroma = chroma ** (1 - .15*expo(hh, 490, 15))
+    chroma = chroma ** (1 - .15*expo(hh, 377, 15))
+    chroma = chroma ** (1 - .05*expo(hh, 460, 35))
+    lch = np.stack((lightness+0*hh, chroma+0*hh, hue+0*cc), 2)
+    lightness = 100*(.01*lightness) ** (1 - .3*np.cos(hh - 230*np.pi/180))
+    rgb = colorconvert(lch, 'lshuv', 'srgb', clip=1)
+    cc = cc.reshape(1,K,1)
+    rgb = rgb + .99 - rgb[:,:1,:].mean(0, keepdims=1)
+    #rgb += .1*(1-cc)
+    rgb[rgb>1]=1
+    rgb[rgb<0]=0
+    #rgb = 1 - (.02+.98*cc.reshape(1,K,1))*(1-rgb)
+    return rgb
