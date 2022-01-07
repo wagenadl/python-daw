@@ -1186,6 +1186,7 @@ def dhsv(N=64):
     cc = colorconvert(rgb0, 'linearrgb', 'srgb', clip=1)
     return cc
 
+
 def lut2d(H=360, C=100):
     '''LUT2D - Perceptually uniform 2d LUT for representing coherences
     lut = LUT2D(H, C) returns a HxCx3 color table for representing
@@ -1195,7 +1196,6 @@ def lut2d(H=360, C=100):
     the angle is represented as hue.
     The map is acceptably uniform, though problems persist in the red portion
     of the color space.'''
-
 
     def vonmises(xx, k):
         return np.exp(k*np.cos(xx))/np.exp(k)
@@ -1229,7 +1229,6 @@ def lut2d(H=360, C=100):
     rgb = colorconvert(lch, 'lshuv', 'srgb', clip=1)
     return rgb
 
-
 def lut2dlight(H=360, K=100):
     def vonmises(xx, k):
         return np.exp(k*np.cos(xx))/np.exp(k)
@@ -1249,7 +1248,7 @@ def lut2dlight(H=360, K=100):
     hh = np.arange(H).reshape(H,1)*360/H * np.pi/180
     hue = hh
     cc = np.arange(K).reshape(1,K)/K
-    chroma = cc**1.5
+    chroma = cc**1.5**1
     chroma = chroma * (1 + .5*expo(hh, 240, 15))
     chroma = chroma ** (1 - .1*expo(hh, 235, 25))
     chroma = chroma ** (1 - .2*expo(hh, 205, 25))
@@ -1260,7 +1259,7 @@ def lut2dlight(H=360, K=100):
     chroma = chroma * (1 + .4*expo(hh, 409, 25))
     chroma = chroma * (1 + .3*expo(hh, 469, 25))
     ll = np.zeros((1,K)) + 65
-    lightness = 99 - 45*cc
+    lightness = 99 - 45*cc**1
     lightness = lightness * (1+.2*cc*expo(hh, 410, 25))
     lightness = lightness * (1-.2*cc**.5*expo(hh, 580, 25))
     #lightness = 100*(.01*lightness) ** (1+.02*expo(hh, 280, 25))
@@ -1295,3 +1294,48 @@ def lut2dlight(H=360, K=100):
     rgb[rgb<0]=0
     #rgb = 1 - (.02+.98*cc.reshape(1,K,1))*(1-rgb)
     return rgb
+
+class Lut2D:
+    def __init__(self, style=1, H=360, C=100):
+        '''Lut2D - Construct a 2D LUT for complex data
+        lut = Lut2D(style, H, C)
+        STYLE = 1: colormap with gray for |z| = 0
+        STYLE = 2: colormap with white for |z| = 0
+        In the future, STYLE = 0 may be implemented with black for |z| = 0.
+        The LUT has H (360) values in the angular direction and C (100)
+        in the radial direction.
+        Both colormaps have been constructed to be as close to perceptually
+        uniform as I could get them on my monitor. The result is still not
+        perfect. In particular, there is a shade of pale blue that looks 
+        brighter than its |z| value would warrant. See ST p. 1025.
+        '''
+        if style==1:
+            self.data = lut2d(H, C)
+        elif style==2:
+            self.data = lut2dlight(H, C)
+        else:
+            raise ValueError("Unsupported style code")
+
+        
+    def lut(self):
+        '''LUT - Return the lookup table
+        x = lut.LUT() returns the lookup table as an HxCx3 array of
+        RGB values in [0,1].'''
+        return self.data
+
+    def lookup(self, z, gamma=1):
+        '''LOOKUP - Look up a complex value in the table
+        rgb = lut.LOOKUP(z), where z is a complex number with |z| ≤ 1,
+        returns an RGB triplet.
+        If Z is an array with shape AxBx...xC, the result is an array
+        with shape AxBx...xCx3.
+        Optional argument GAMMA applies gamma correction to |z|, resulting
+        in lighter and less saturated colors if gamma>1.'''
+        if gamma != 1:
+            z = z * np.abs(z)**(gamma-1)
+        H,C,_ = self.data.shape
+        pha = (H*np.angle(z)/(2*np.pi)).astype(int) % H
+        rad = (C*np.abs(z)).astype(int)
+        rad[rad>=C] = C - 1
+        return self.data[pha, rad, :]
+        
