@@ -5,89 +5,68 @@ import pyqplot as qp
 import daw.colorx
 
 
-def lut2d(H=360, K=100):
-    hue = np.arange(H).reshape(H,1)*np.pi/180
-    chroma = np.arange(K).reshape(1,K)*1.5/K
-    lightness = np.arange(K).reshape(1,K)*0 + 65 + 5*chroma*np.cos(hue-1.1)
-    chroma = chroma + chroma*.1*np.cos(hue) + chroma*.15*np.cos(2*hue-3.5)
-    lch = np.stack((lightness+0*hue, chroma+0*hue, hue+0*chroma), 2)
-    rgb = daw.colorx.colorconvert(lch, 'lshuv', 'srgb', clip=1)
-    return rgb
+def vonmises(xx, k):
+    return np.exp(k*np.cos(xx))/np.exp(k)
 
-qp.figure('s1', 10, 3)
+def expo(xx, x0, r):
+    return vonmises(xx - x0*np.pi/180, 1/(r*np.pi/180))
 
-qp.image(np.concatenate((lut2d().transpose(1,0,2), lut2d().transpose(1,0,2)),1))
+def shift(xx, x0, a, r):
+    yy = vonmises(xx - x0*np.pi/180, 1/(r*np.pi/180))
+    dydx = np.abs(np.max(np.diff(yy, axis=0) / np.diff(xx, axis=0)))
+    return yy*a/dydx
 
-#%%
+def cexp(xx, x0, r):
+    yy = np.exp(-.5*(xx-x0)**2/r**2)
+    return yy
 
-
-def lut2d(H=360, K=100):
-    def vonmises(xx, k):
-        return np.exp(k*np.cos(xx))/np.exp(k)
-
-    def expo(xx, x0, r):
-        return vonmises(xx - x0*np.pi/180, 1/(r*np.pi/180))
-
-    def shift(xx, x0, a, r):
-        yy = vonmises(xx - x0*np.pi/180, 1/(r*np.pi/180))
-        dydx = np.abs(np.max(np.diff(yy, axis=0) / np.diff(xx, axis=0)))
-        return yy*a/dydx
-
-    def cexp(xx, x0, a, r):
-        yy = a*np.exp(-.5*(xx-x0)**2/r**2)
-        return yy
-    
-    hh = np.arange(H).reshape(H,1)*360/H * np.pi/180
+def z2rgb(zz):
+    hh = np.angle(zz)
     hue = hh
-    cc = np.arange(K).reshape(1,K)/K
-    chroma = cc**1.5
-    chroma = chroma * (1 + .5*expo(hh, 240, 15))
-    chroma = chroma ** (1 - .1*expo(hh, 235, 25))
-    chroma = chroma ** (1 - .2*expo(hh, 205, 25))
-    chroma = chroma ** (1 - .3*expo(hh, 475, 25))
-    chroma = chroma ** (1 - .1*expo(hh, 375, 25))
-    chroma = chroma ** (1 - .15*expo(hh, 430, 25))
-    chroma = chroma ** (1 - .1*expo(hh, 300, 75))
-    chroma = chroma * (1 + .4*expo(hh, 409, 25))
-    chroma = chroma * (1 + .3*expo(hh, 469, 25))
-    ll = np.zeros((1,K)) + 65
-    lightness = 99 - 45*cc
-    lightness = lightness * (1+.2*cc*expo(hh, 410, 25))
-    lightness = lightness * (1-.2*cc**.5*expo(hh, 580, 25))
-    #lightness = 100*(.01*lightness) ** (1+.02*expo(hh, 280, 25))
-    hue = hue + shift(hh, 350, .1, 25)
-    hue = hue + shift(hh, 230, .3, 20)
-    hue = hue - shift(hh, 275, .2, 30)
-    hue = hue + shift(hh, 390, .4, 15)
-    hue = hue - shift(hh, 350, .05, 100)
-    chroma = chroma * (1 + .2*expo(hh, 280, 15))
-    chroma = chroma ** (1 - .3*expo(hh, 275, 25))
-    chroma = chroma ** (1 - .2*expo(hh, 180, 25))
-    chroma = chroma ** (1 - .2*expo(hh, 370, 25))
-    hue = hue + cexp(cc, 1, 1, .2)*shift(hh, 270, .15, 20)
-    hue = hue - cexp(cc, 1, 1, .2)*shift(hh, 460, .2, 20)
-    chroma = chroma * (1 + .4*expo(hh, 267, 10))
-    chroma = chroma ** (1 - .25*expo(hh, 262, 10))
-    hue = hue - cexp(cc, 0, 1, .2)*shift(hh, 260, .1, 25)
-    hue = hue - cexp(cc, .25, 1, .2)*shift(hh, 270, .1, 20)
-    chroma = chroma ** (1 - .25*expo(hh, 275, 10))
-    chroma = chroma ** (1 - .15*expo(hh, 207, 15))
-    chroma = chroma ** (1 - .15*expo(hh, 490, 15))
-    chroma = chroma ** (1 - .15*expo(hh, 377, 15))
-    chroma = chroma ** (1 - .05*expo(hh, 460, 35))
-    #chroma = chroma ** (1 + .25*expo(hh, 260, 15))
-    lightness = 100*(.01*lightness) ** (1 - .3*np.cos(hh - 230*np.pi/180))
-    lch = np.stack((lightness+0*hh, chroma+0*hh, hue+0*cc), 2)
+    cc = np.abs(zz)
+    chroma = cc**1.9*1.6
+    lightness = 99 - 40*cc**1.5
+    lightness += 20*cc**1.5*np.cos(hh-80*np.pi/180)
+
+    hue = hue - .6*expo(hh, 250, 30)*(1-cc)
+    hue = hue + .6*expo(hh, 120, 30)*(1-cc)
+    chroma = chroma**(1 - .1*expo(hh, 80, 30))
+
+    lch = np.stack((lightness, chroma, hue), 2)
     rgb = daw.colorx.colorconvert(lch, 'lshuv', 'srgb', clip=1)
-    cc = cc.reshape(1,K,1)
-    rgb = rgb + .99 - rgb[:,:1,:].mean(0, keepdims=1)
-    #rgb += .1*(1-cc)
+    A,B,C = rgb.shape
+    z0 = np.argmin(np.abs(zz.reshape(A*B)))
+    rgb0 = rgb.reshape(A*B,C)[z0] # rgb.max((0,1), keepdims=1)
+    rgb = rgb + .99 - rgb0
     rgb[rgb>1]=1
     rgb[rgb<0]=0
-    #rgb = 1 - (.02+.98*cc.reshape(1,K,1))*(1-rgb)
     return rgb
 
-qp.figure('s2', 10, 3)
+qp.figure('s2', 8, 4)
+qp.subplot(1,2,0)
+xx = np.arange(-1,1.0001, .002)
+X = len(xx)
+xx = xx.reshape(1,X)
+yy = xx.T
+zz = xx + 1j*yy
+zz[np.abs(zz)>1] = 1e-9
+qp.image(z2rgb(zz), xx=xx, yy=-yy)
+phi = np.arange(0,2*np.pi+.0001,.001)
+qp.pen('k', 0, alpha=.2)
+for r in [.3, .4]:
+    qp.plot(r*np.cos(phi), r*np.sin(phi))
+qp.marker('+',1)
+qp.mark(0,0)
+qp.shrink(1,1)
 
-qp.image(np.concatenate((lut2d().transpose(1,0,2), lut2d().transpose(1,0,2)),1))
-
+qp.subplot(1,2,1)
+xx = np.arange(0,3*np.pi, .01)
+X = len(xx)
+yy = np.arange(0,1,.005)
+Y = len(yy)
+zz = yy.reshape(Y,1)*np.exp(1j*xx.reshape(1,X))
+qp.image(z2rgb(zz), xx=180*xx/np.pi, yy=-yy)
+qp.pen('k', 0, alpha=.2)
+for r in [.3, .4]:
+    qp.plot(xx*180/np.pi, 0*xx-r)
+qp.shrink(1)
