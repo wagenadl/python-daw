@@ -33,7 +33,12 @@ def ol_summary(pfx, ss, bo, bc, sfx='', countrest=True, quote=True):
     luse = 0
     for s in ss:
         if quote:
-            s = repr(s)
+            if type(s)==float or type(s)==np.float64:
+                s = f'{s:.4}'
+            elif type(s)==complex or type(s)==np.complex64:
+                s = f'{s:.3}'
+            else:
+                s = repr(s)
         if luse + 2 + len(s) + len(pfx) + len(sfx) + 6 < linelen:
             use.append(s)
             luse += 2 + len(s)
@@ -89,7 +94,7 @@ def ol_nd_array(pfx, x):
     if N==0 or N==np.max(x.shape):
         N = min(10, N)
         if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
-            return ol_summary(pfx, [f'{v:.4g}' for v in x.flat], '[', ']', shp,
+            return ol_summary(pfx, [f'{v:.3}' for v in x.flat], '[', ']', shp,
                               countrest=False, quote=False)
         else:            
             return ol_summary(pfx, [str(v) for v in x.flat], '[', ']', shp,
@@ -236,9 +241,13 @@ def d_nd_array(name, x):
     if N==0:
         res.append('  (empty)')
     elif x.ndim==0:
-        if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
+        if x.dtype==np.float32 or x.dtype==np.float64:
             res.append(ol_summary('  ',
-                                  [f'{v:.4g}' for v in x.flat],
+                                  [f'{v:.4}' for v in x.flat],
+                                  '', '', quote=False))
+        elif x.dtype==np.complex:
+            res.append(ol_summary('  ',
+                                  [f'{v:.3}' for v in x.flat],
                                   '', '', quote=False))
         else:
             res.append(ol_summary('  ',
@@ -246,9 +255,13 @@ def d_nd_array(name, x):
                                   '', '', quote=False))
     elif x.ndim==1 or N==np.max(x.shape): # vector
         K = min(10, N)
-        if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
+        if x.dtype==np.float32 or x.dtype==np.float64:
             res.append(ol_summary('  ',
-                                  [f'{v:.4g}' for v in x.flat[:K]],
+                                  [f'{v:.4}' for v in x.flat[:K]],
+                                  '[', ']', countrest=False, quote=False))
+        elif x.dtype==np.complex:
+            res.append(ol_summary('  ',
+                                  [f'{v:.3}' for v in x.flat[:K]],
                                   '[', ']', countrest=False, quote=False))
         else:
             res.append(ol_summary('  ',

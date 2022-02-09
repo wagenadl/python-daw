@@ -1187,6 +1187,22 @@ def dhsv(N=64):
     return cc
 
 
+def _vonmises(xx, k):
+    return np.exp(k*np.cos(xx))/np.exp(k)
+
+def _expo(xx, x0, r):
+    return _vonmises(xx - x0*np.pi/180, 1/(r*np.pi/180))
+
+def _shift(xx, x0, a, r):
+    yy = _vonmises(xx - x0*np.pi/180, 1/(r*np.pi/180))
+    dydx = np.abs(np.max(np.diff(yy, axis=0) / np.diff(xx, axis=0)))
+    return yy*a/dydx
+
+def _cexp(xx, x0, a, r):
+    yy = a*np.exp(-.5*(xx-x0)**2/r**2)
+    return yy
+
+
 def lut2d(H=360, C=100):
     '''LUT2D - Perceptually uniform 2d LUT for representing coherences
     lut = LUT2D(H, C) returns a HxCx3 color table for representing
@@ -1196,10 +1212,8 @@ def lut2d(H=360, C=100):
     the angle is represented as hue.
     The map is acceptably uniform, though problems persist in the red portion
     of the color space.'''
-
     def vonmises(xx, k):
         return np.exp(k*np.cos(xx))/np.exp(k)
-
     def expo(xx, r):
         return vonmises(xx, 1/r)
     
@@ -1229,74 +1243,39 @@ def lut2d(H=360, C=100):
     rgb = colorconvert(lch, 'lshuv', 'srgb', clip=1)
     return rgb
 
-def lut2dlight(H=360, K=100):
-    def vonmises(xx, k):
-        return np.exp(k*np.cos(xx))/np.exp(k)
 
-    def expo(xx, x0, r):
-        return vonmises(xx - x0*np.pi/180, 1/(r*np.pi/180))
-
-    def shift(xx, x0, a, r):
-        yy = vonmises(xx - x0*np.pi/180, 1/(r*np.pi/180))
-        dydx = np.abs(np.max(np.diff(yy, axis=0) / np.diff(xx, axis=0)))
-        return yy*a/dydx
-
-    def cexp(xx, x0, a, r):
-        yy = a*np.exp(-.5*(xx-x0)**2/r**2)
-        return yy
-    
-    hh = np.arange(H).reshape(H,1)*360/H * np.pi/180
+def _z2rgb(zz):
+    hh = np.angle(zz)
     hue = hh
-    cc = np.arange(K).reshape(1,K)/K
-    chroma = cc**1.5**1
-    chroma = chroma * (1 + .5*expo(hh, 240, 15))
-    chroma = chroma ** (1 - .1*expo(hh, 235, 25))
-    chroma = chroma ** (1 - .2*expo(hh, 205, 25))
-    chroma = chroma ** (1 - .3*expo(hh, 475, 25))
-    chroma = chroma ** (1 - .1*expo(hh, 375, 25))
-    chroma = chroma ** (1 - .15*expo(hh, 430, 25))
-    chroma = chroma ** (1 - .1*expo(hh, 300, 75))
-    chroma = chroma * (1 + .4*expo(hh, 409, 25))
-    chroma = chroma * (1 + .3*expo(hh, 469, 25))
-    ll = np.zeros((1,K)) + 65
-    lightness = 99 - 45*cc**1
-    lightness = lightness * (1+.2*cc*expo(hh, 410, 25))
-    lightness = lightness * (1-.2*cc**.5*expo(hh, 580, 25))
-    #lightness = 100*(.01*lightness) ** (1+.02*expo(hh, 280, 25))
-    hue = hue + shift(hh, 350, .1, 25)
-    hue = hue + shift(hh, 230, .3, 20)
-    hue = hue - shift(hh, 275, .2, 30)
-    hue = hue + shift(hh, 390, .4, 15)
-    hue = hue - shift(hh, 350, .05, 100)
-    chroma = chroma * (1 + .2*expo(hh, 280, 15))
-    chroma = chroma ** (1 - .3*expo(hh, 275, 25))
-    chroma = chroma ** (1 - .2*expo(hh, 180, 25))
-    chroma = chroma ** (1 - .2*expo(hh, 370, 25))
-    hue = hue + cexp(cc, 1, 1, .2)*shift(hh, 270, .15, 20)
-    hue = hue - cexp(cc, 1, 1, .2)*shift(hh, 460, .2, 20)
-    chroma = chroma * (1 + .4*expo(hh, 267, 10))
-    chroma = chroma ** (1 - .25*expo(hh, 262, 10))
-    hue = hue - cexp(cc, 0, 1, .2)*shift(hh, 260, .3, 25)
-    hue = hue - cexp(cc, .25, 1, .2)*shift(hh, 270, .1, 20)
-    chroma = chroma ** (1 + .25*expo(hh, 245, 15))
-    chroma = chroma ** (1 - .25*expo(hh, 275, 10))
-    chroma = chroma ** (1 - .15*expo(hh, 207, 15))
-    chroma = chroma ** (1 - .15*expo(hh, 490, 15))
-    chroma = chroma ** (1 - .15*expo(hh, 377, 15))
-    chroma = chroma ** (1 - .05*expo(hh, 460, 35))
-    lch = np.stack((lightness+0*hh, chroma+0*hh, hue+0*cc), 2)
-    lightness = 100*(.01*lightness) ** (1 - .3*np.cos(hh - 230*np.pi/180))
+    cc = np.abs(zz)
+    chroma = cc**1.9*1.6
+    lightness = 99 - 40*cc**1.5
+    lightness += 20*cc**1.5*np.cos(hh-80*np.pi/180)
+
+    hue = hue - .6*_expo(hh, 250, 30)*(1-cc)
+    hue = hue + .6*_expo(hh, 120, 30)*(1-cc)
+    chroma = chroma**(1 - .15*_expo(hh, 80, 30))
+
+    lch = np.stack((lightness, chroma, hue), 2)
     rgb = colorconvert(lch, 'lshuv', 'srgb', clip=1)
-    cc = cc.reshape(1,K,1)
-    rgb = rgb + .99 - rgb[:,:1,:].mean(0, keepdims=1)
-    #rgb += .1*(1-cc)
+    A,B,C = rgb.shape
+    z0 = np.argmin(np.abs(zz.reshape(A*B)))
+    rgb0 = rgb.reshape(A*B,C)[z0] # rgb.max((0,1), keepdims=1)
+    rgb = rgb + .99 - rgb0
     rgb[rgb>1]=1
     rgb[rgb<0]=0
-    #rgb = 1 - (.02+.98*cc.reshape(1,K,1))*(1-rgb)
     return rgb
 
+
+def lut2dlight(H=360, C=100):
+    xx = np.arange(H).reshape(H,1)*np.pi*2/H
+    yy = np.arange(C)/C
+    zz = yy*np.exp(1j*xx)
+    return _z2rgb(zz)
+    
+
 class Lut2D:
-    def __init__(self, style=1, H=360, C=100):
+    def __init__(self, style=2, H=360, C=100, origin=1):
         '''Lut2D - Construct a 2D LUT for complex data
         lut = Lut2D(style, H, C)
         STYLE = 1: colormap with gray for |z| = 0
@@ -1304,6 +1283,9 @@ class Lut2D:
         In the future, STYLE = 0 may be implemented with black for |z| = 0.
         The LUT has H (360) values in the angular direction and C (100)
         in the radial direction.
+        Optional ORIGIN rotates the LUT in one of two standard ways:
+        ORIGIN = 1: phase 0 is purple, negative phase to yellow
+        ORIGIN = 2: phase 0 is yellow, negative phase to red
         Both colormaps have been constructed to be as close to perceptually
         uniform as I could get them on my monitor. The result is still not
         perfect. In particular, there is a shade of pale blue that looks 
@@ -1315,6 +1297,11 @@ class Lut2D:
             self.data = lut2dlight(H, C)
         else:
             raise ValueError("Unsupported style code")
+        if origin==1:
+            self.data = np.flip(self.data, axis=0)
+            self.data = np.roll(self.data, -int(H*.15), axis=0)
+        elif origin==2:
+            self.data = np.roll(self.data, -int(H*.2), axis=0)
 
         
     def lut(self):
@@ -1331,11 +1318,20 @@ class Lut2D:
         with shape AxBx...xCx3.
         Optional argument GAMMA applies gamma correction to |z|, resulting
         in lighter and less saturated colors if gamma>1.'''
+        isarray = type(z)==np.ndarray
         if gamma != 1:
-            z = z * np.abs(z)**(gamma-1)
+            z = z * (np.abs(z)+1e-99)**(gamma-1)
         H,C,_ = self.data.shape
         pha = (H*np.angle(z)/(2*np.pi)).astype(int) % H
         rad = (C*np.abs(z)).astype(int)
-        rad[rad>=C] = C - 1
-        return self.data[pha, rad, :]
+        if isarray:
+            rad[rad>=C] = C - 1
+        else:
+            rad = min(rad, C-1)
+        rgb = self.data[pha, rad, :]
+        if isarray:
+            return rgb
+        else:
+            return list(rgb.flatten())
+        
         
