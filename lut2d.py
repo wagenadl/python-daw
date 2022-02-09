@@ -30,6 +30,7 @@ def z2rgb(zz):
 
     hue = hue - .6*expo(hh, 250, 30)*(1-cc)
     hue = hue + .6*expo(hh, 120, 30)*(1-cc)
+    chroma = chroma**(1 - .1*expo(hh, 80, 30))
 
     lch = np.stack((lightness, chroma, hue), 2)
     rgb = daw.colorx.colorconvert(lch, 'lshuv', 'srgb', clip=1)
@@ -54,6 +55,8 @@ phi = np.arange(0,2*np.pi+.0001,.001)
 qp.pen('k', 0, alpha=.2)
 for r in [.3, .4]:
     qp.plot(r*np.cos(phi), r*np.sin(phi))
+qp.marker('+',1)
+qp.mark(0,0)
 qp.shrink(1,1)
 
 qp.subplot(1,2,1)
