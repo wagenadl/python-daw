@@ -30,7 +30,7 @@ def z2rgb(zz):
 
     hue = hue - .6*expo(hh, 250, 30)*(1-cc)
     hue = hue + .6*expo(hh, 120, 30)*(1-cc)
-    chroma = chroma**(1 - .1*expo(hh, 80, 30))
+    chroma = chroma**(1 - .15*expo(hh, 80, 30))
 
     lch = np.stack((lightness, chroma, hue), 2)
     rgb = daw.colorx.colorconvert(lch, 'lshuv', 'srgb', clip=1)
