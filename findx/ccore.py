@@ -4,7 +4,13 @@ import numpy as np
 import ctypes as ct
 import os
 
-_ccore = np.ctypeslib.load_library('libccore', os.path.dirname(__file__))
+if os.name=='posix':
+    _pfx = 'lib'
+else:
+    _pfx =''
+_libname = _pfx + 'ccore'
+
+_ccore = np.ctypeslib.load_library(_libname, os.path.dirname(__file__))
 
 _ops = [ 'ge', 'gt', 'le', 'lt', 'eq', 'ne' ]
 _typs = [ 'float', 'double',
