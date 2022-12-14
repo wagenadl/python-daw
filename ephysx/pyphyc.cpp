@@ -9,6 +9,7 @@
 #define DECLSPEC __declspec(dllexport)
 #else
 #define DECLSPEC
+#endif
 
 extern "C" {
   int foo(int x) {

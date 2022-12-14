@@ -34,9 +34,9 @@ def ol_summary(pfx, ss, bo, bc, sfx='', countrest=True, quote=True):
     for s in ss:
         if quote:
             if type(s)==float or type(s)==np.float64:
-                s = f'{s:.4}'
+                s = f'{s:.4g}'
             elif type(s)==complex or type(s)==np.complex64:
-                s = f'{s:.3}'
+                s = f'{s:.3g}'
             else:
                 s = repr(s)
         if luse + 2 + len(s) + len(pfx) + len(sfx) + 6 < linelen:
@@ -94,7 +94,7 @@ def ol_nd_array(pfx, x):
     if N==0 or N==np.max(x.shape):
         N = min(10, N)
         if x.dtype==np.float32 or x.dtype==np.float64 or x.dtype==np.complex:
-            return ol_summary(pfx, [f'{v:.3}' for v in x.flat], '[', ']', shp,
+            return ol_summary(pfx, [f'{v:.3g}' for v in x.flat], '[', ']', shp,
                               countrest=False, quote=False)
         else:            
             return ol_summary(pfx, [str(v) for v in x.flat], '[', ']', shp,
@@ -109,11 +109,15 @@ def ol_string(pfx, x):
         return f'{pfx} "{x}"'
         
 def ol_number(pfx, x):
-    try:
-        # This fails for integers
-        return f'{pfx} {x:.4}'
-    except:
-        return f'{pfx} {x}'
+    if isinstance(x, numbers.Integral):
+        if abs(x) > 10**40:
+            return f'{pfx} {x+0.} (integer)'
+        elif abs(x) > 10000:
+            return pfx + " " + "{:,}".format(x).replace(",", "’")
+        else:
+            return f'{pfx} {x}'
+    else:
+        return f'{pfx} {x:.4g}'
 
 def ol_other(pfx, x):
     return f'{pfx} «{type(x)}»'

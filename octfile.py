@@ -246,14 +246,17 @@ def _pythonify_struct(v):
     return ss
     
 def _pythonify(v):
-    if v.dtype==object:
-        return _pythonify_cell(v)
-    elif v.dtype.names is not None:
-        return _pythonify_struct(v)
-    elif v.dtype.kind=='U':
-        return _pythonify_string(v)
+    if type(v)==np.ndarray:
+        if v.dtype==object:
+            return _pythonify_cell(v)
+        elif v.dtype.names is not None:
+            return _pythonify_struct(v)
+        elif v.dtype.kind=='U':
+            return _pythonify_string(v)
+        else:
+            return _pythonify_matrix(v)
     else:
-        return _pythonify_matrix(v)
+        return v
     
 def loadmat(ifn):
     '''LOAD - Load a .mat file

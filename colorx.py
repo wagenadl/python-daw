@@ -1146,7 +1146,6 @@ def _interp1(x, y, xi):
     y = y.T
     N,C = y.shape
     K, = xi.shape
-    print(x.shape, y.shape, xi.shape)
     y1 = np.zeros((K,C))
     for c in range(C):
         y1[:,c] = np.interp(xi, x, y[:,c])

@@ -9,28 +9,38 @@ import collections
 def cansave(v):
     '''CANSAVE - Can a given object be saved by PPERSIST?
     CANSAVE(v) returns True if V can be saved by PPERSIST.
+
     Currently, PPERSIST can save:
+
       - None
-      - Numpy arrays
+      - Numpy arrays (but not containing np.object)
       - Strings
       - Simple numbers (int, float, complex)
-      - Lists, tuples, and dicts containing those (even hierarchically).'''
+      - Lists, tuples, sets, and dicts containing those (even hierarchically).
+
+    Importantly, PPERSIST cannot save objects of arbitrary class or
+    function type. 
+
+    PPERSIST will not attempt to load types it cannot save. This is
+    intended to protect PPERSIST against the well-documented security
+    problems of the underlying pickle module.'''
     if v is None:
         return True
     t = type(v)
-    if t==np.ndarray:
+    if t==np.ndarray and v.dtype!=np.object:
         return True
     if t==str:
         return True
     if t==int or t==np.int32 or t==np.int64 \
-       or t==float or t==np.float64 or t==complex:
+       or t==float or t==np.float64 or t==np.float32 \
+       or t==complex or t==np.complex128 or t==np.complex64:
         return True
     if t==dict:
         for k,v1 in v.items():
             if not cansave(v1):
                 return False
         return True
-    if t==list or t==tuple:
+    if t==list or t==tuple or t==set:
         for v1 in v:
             if not cansave(v1):
                 return False
@@ -102,13 +112,42 @@ def savedict(fn, dct):
     with open(fn, 'wb') as fd:  
         pickle.dump(dct, fd, pickle.HIGHEST_PROTOCOL)    
 
-def loaddict(fn):
+        
+class _Loader(pickle.Unpickler):
+    safe_types = {
+        "builtins": { "range", "complex", "set", "frozenset", "slice" },
+        "numpy.core.multiarray": { "scalar" },
+        "numpy": { "dtype", "ndarray" },
+        "numpy.core.numeric": { "_frombuffer" },
+        "numpy.core.multiarray": { "_reconstruct" }
+        
+    }
+    def __init__(self, fd, unsafe=False):
+        # Pass unsafe=True only for debugging on trusted files!
+        super().__init__(fd)
+        self.unsafe = unsafe
+    def find_class(self, module, name):
+        if module in _Loader.safe_types and name in _Loader.safe_types[module]:
+            return super().find_class(module, name)
+        # Forbid everything else.
+        elif self.unsafe:
+            print(f"ppersist warning: {module}.{name} is not in safe_types")
+            res = super().find_class(module, name)
+            print("-> ", res)
+            return res
+        else:
+            raise pickle.UnpicklingError(
+                "ppersist: '%s.%s' is not in safe_types" 
+                % (module, name))
+        
+def loaddict(fn, unsafe=False):
     '''LOADDICT - Reload data saved with SAVE or SAVEDICT
     x = LOADDICT(fn) loads the file named FN, which should have been created
     by SAVE. The result is a dictionary with the original variable names
     as keys.'''
+    # Pass unsafe=True only for debugging on trusted files!
     with open(fn, 'rb') as fd:
-        dct = pickle.load(fd)
+        dct = _Loader(fd, unsafe).load()
     del dct['__names__']
     return dct
 
@@ -118,7 +157,7 @@ def loadtuple(fn, typename='PPERSIST'):
     by SAVE. The result is a named tuple with the original variable names
     as keys.'''
     with open(fn, 'rb') as fd:
-        dct = pickle.load(fd)
+        dct = _Loader(fd).load()
     names = dct['__names__']
     tpl = collections.namedtuple(typename, names)
     lst = []
@@ -137,7 +176,7 @@ def load(fn):
     This is a super ugly Matlab-style hack, but really convenient.
     LOADDICT and LOADTUPLE are cleaner alternatives'''
     with open(fn, 'rb') as fd:
-        dct = pickle.load(fd)
+        dct = _Loader(fd).load()
     names = dct['__names__']
 
     frame = inspect.currentframe().f_back
