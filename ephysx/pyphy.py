@@ -7,6 +7,7 @@ import numpy as np
 import os
 import ctypes as ct
 import sip
+import traceback
 
 if os.name=='posix':
     _pfx = 'lib'
@@ -28,7 +29,6 @@ _pyphyc.quickdraw.argtypes = [ct.c_int64,
                               ct.c_int,
                               ct.c_float]
 
-
 def lastlessthan(xx, y):
     j = None
     for i in range(len(xx)):
@@ -37,13 +37,11 @@ def lastlessthan(xx, y):
         else:
             return j
 
-
 def firstgreaterthan(xx, y):
     for i in range(len(xx)):
         if xx[i]>y:
             return i
     return None
-
 
 def sensiblestep(mx):
     '''dx = SENSIBLESTEP(mx) returns a sensible step size not much smaller
@@ -135,7 +133,6 @@ class _EPhysView(QWidget):
         self.t0_s = max(min(self.t0_s + dx/10 * self.tscale_s,
                             T - self.tscale_s), 0)
                             
-        print(dx, dy)
         self.update()
 
     def keyPressEvent(self, evt):
@@ -231,6 +228,9 @@ class _EPhysView(QWidget):
         ptr = QPainter(self)
         try:
             self._doPaint(ptr)
+        except Exception as e:
+            traceback.print_exc()
+            print('Exception:', e)
         finally:
             del ptr
 
@@ -245,20 +245,20 @@ class _EPhysView(QWidget):
         def t2x(t): # Single value
             return int(self.margin_left
                        + (t-self.t0_s)*w/self.tscale_s + .5)
-        def t2x(t): # Vector
+        def tt2x(t): # Vector
             return (self.margin_left
                     + (t-self.t0_s)*w/self.tscale_s + .5).astype(int)
         def cv2y(c, v=0): # Single value
             return int(self.margin_top + h*(c+.5-self.c0)/self.cscale_chans
                        + h*v/self.cscale_chans/self.csep_digi + .5)
 
-        self._drawTimeAxis(ptr, t2x, sensiblestep(self.tscale_s/(1 + w/200)))
+        self._drawTimeAxis(ptr, t2x, sensiblestep(self.tscale_s/(1 + w/200)), h)
         self._drawChannelNames(ptr, cv2y)
         if self.mem is not None:
-            self._drawEphysTraces(ptr, cv2x, cv2y)
+            self._drawEphysTraces(ptr, t2x, cv2y, w , h)
         self._drawSpikes(ptr, tt2x, cv2y)
 
-    def _drawTimeAxis(self, ptr, t2x, ttick):
+    def _drawTimeAxis(self, ptr, t2x, ttick, h):
         t0 = np.ceil(self.t0_s/ttick) * ttick
         t1 = np.floor((self.t0_s+self.tscale_s)//ttick) * ttick
 
@@ -296,7 +296,7 @@ class _EPhysView(QWidget):
                          Qt.AlignRight + Qt.AlignVCenter,
                          cname)
 
-    def _drawEphys(self, ptr, t2x, cv2y):
+    def _drawEphysTraces(self, ptr, t2x, cv2y, w , h):
         # Draw electrophysiology traces
         L = self.mem.shape[0]
         K = int(self.tscale_s * self.fs_Hz)
@@ -305,9 +305,9 @@ class _EPhysView(QWidget):
         C = self.mem.shape[1]
         c1 = min(self.c0 + self.cscale_chans, C)
         for c in np.arange(self.c0, c1, dtype=int):
-            clr = QColor(int(127+127*np.cos(c*2.127+.1238)),
-                         int(127+127*np.cos(c*4.5789+4.123809)),
-                         int(127+127*np.cos(c*8.123+23.32412)))
+            clr = QColor(int(150+100*np.cos(c*2.127+.1238)),
+                         int(150+100*np.cos(c*4.5789+4.123809)),
+                         int(150+100*np.cos(c*8.123+23.32412)))
             ptr.setBrush(clr)
             ptr.setPen(clr)
             dt1 = self.mem[k0:k1,c]
@@ -315,7 +315,7 @@ class _EPhysView(QWidget):
                 print('convert')
                 dt1 = dt1.astype(np.int16)
             dptr = dt1.__array_interface__['data'][0]
-            dstride = (dt1[1:].__array_interface__['data'][0] - dataptr) // 2
+            dstride = (dt1[1:].__array_interface__['data'][0] - dptr) // 2
             _pyphyc.quickdraw(sip.unwrapinstance(ptr),
                               dptr,
                               K,
@@ -325,26 +325,36 @@ class _EPhysView(QWidget):
                               cv2y(c),
                               -h/self.cscale_chans/self.csep_digi)
 
-    def _drawSpikes(self, tt2x, cv2y):
+    def _drawSpikes(self, ptr, tt2x, cv2y):
         t0 = self.t0_s
         t1 = self.t0_s+self.tscale_s
-        R = 3
+        R = 6
         c1 = .5
-        for c, tt in self.spikes:
+        for cc, tt in self.spikes:
             c1 += 1
-            if c<self.c0 or c >= self.c0 + self.cscale_chans:
+            if type(cc)==list or type(cc)==np.ndarray:
+                pass
+            else:
+                cc = [cc]
+            cc = np.array(cc)
+            #print('drawspikes', self.c0, self.cscale_chans, c, t0, t1)
+            if not np.any(np.logical_and(cc>=self.c0, cc<self.c0 + self.cscale_chans)):
                 continue
             xx = tt2x(tt[np.logical_and(tt>=t0, tt<t1)])
             if len(xx):
-                y = cv2y(c)
-                clr = QColor(int(127+127*np.cos(c1*2.127+.1238)),
-                             int(127+127*np.cos(c1*4.5789+4.123809)),
-                             int(127+127*np.cos(c1*8.123+23.32412)))
+                clr = QColor(int(150+100*np.cos(c1*2.127+.1238)),
+                             int(150+100*np.cos(c1*4.5789+4.123809)),
+                             int(150+100*np.cos(c1*8.123+23.32412)))
                 ptr.setBrush(clr)
-                for x in xx:
-                    ptr.drawEllipse(QRect(x-R, y-R, 2*R, 2*R))
+                ptr.setPen(Qt.NoPen)
+                r = R
+                for c in cc:
+                    y = cv2y(c-.25)
+                    for x in xx:
+                        ptr.drawEllipse(QRect(x-r, y-r, 2*r, 2*r))
+                    r = R//2
 
-
+            
 class PyPhy:
     app = None
     
@@ -388,13 +398,15 @@ class PyPhy:
         
         SETSPIKES(spkmap), where SPKMAP is a list of (c, tt) pairs
         containing electrode channels (C) and associated vectors of
-        spike times (TT), adds graphical marks for those spikes.'''
+        spike times (TT), adds graphical marks for those
+        spikes.'''
         self.win.setSpikes(spkmap)
-
-
-def pyphy(dat, fs_Hz, chlist=None, stims=None):
+        
+def pyphy(dat, fs_Hz, chlist=None, stims=None, spikes=None):
     wdg = PyPhy()
     wdg.setData(dat, fs_Hz, chlist)
     if stims is not None:
         wdg.setStimuli(stims / fs_Hz)
+    if spikes is not None:
+        wdg.setSpikes(spikes)
     return wdg
