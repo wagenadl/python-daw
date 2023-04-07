@@ -1,35 +1,47 @@
 import numpy as np
 
-inch = 25.4
-mm = 1
-deg = np.pi/180
-minute = 60
+#deg = np.pi/180
 wcs = 'G54'
+
+def setwcs(w):
+    global wcs
+    wcs = w
+
+def mm_to_machine(x):
+    return x / 25.4 # convert mm to inch
+
+def mm_s_to_machine(v):
+    return 60*v/25.4 # convert mm/s to inch/min
+
+def deg_to_machine(theta):
+    return theta # leave degrees as degrees
+
+def rpm_to_machine(rpm):
+    return rpm # leave rpm as rpm
 
 def X(x):
     '''Generate X parameter. Input is in mm.'''
-    return f'X{x/inch:.4f}'
+    return f'X{mm_to_machine(x):.4f}'
 
 def Y(y):
     '''Generate Y parameter. Input is in mm.'''
-    return f'Y{y/inch:.4f}'
+    return f'Y{mm_to_machine(y):.4f}'
 
 def Z(z):
     '''Generate Z parameter. Input is in mm.'''
-    return f'Z{z/inch:.4f}'
+    return f'Z{mm_to_machine(z):.4f}'
 
 def A(a):
     '''Generate A parameter. Input is in degrees.'''
-    return f'A{a:.3f}'
+    return f'A{deg_to_machine(a):.3f}'
 
 def C(c):
     '''Generate C parameter. Input is in degrees.'''
-    return f'C{c:.3f}'
+    return f'C{deg_to_machine(c):.3f}'
 
 def F(f):
     '''Generate F parameter. Input is in mm/s.'''
-    inch_min = minute*f/inch
-    return f'F{inch_min:.3f}'
+    return f'F{mm_s_to_machine(f):.3f}'
 
 def preamble(tool=1):
     return f'''
@@ -52,13 +64,13 @@ def retractandrotate(a=0, c=0):
 G53 G0 Z0.
 {wcs}
 M11
-G0 A{a:.2f} C{c:.2f}
+G0 A{deg_to_machine(a):.2f} C{deg_to_machine(c):.2f}
 M10 
 '''
 
 def start(speed=1000):
     '''Start the spindle at given speed (rpm)'''
-    return f'S{speed} M3\n'
+    return f'S{rpm_to_machine(speed)} M3\n'
 
 def stop():
     '''Stop the spindle'''
@@ -73,7 +85,7 @@ M1
 
 def probez(dz_mm=25):
     dz = abs(dz_mm)
-    return f'''G65 P9995 W{wcs[1:]}. A20. H{-dz/25.4:.3f}
+    return f'''G65 P9995 W{wcs[1:]}. A20. H{mm_to_machine(-dz):.3f}
     '''
 
 def probez_at(x_mm, y_mm, z_mm, zsafe_mm=100, dz_mm=25):

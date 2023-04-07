@@ -342,7 +342,7 @@ class _EPhysView(QWidget):
                              int(127+127*np.cos(c1*8.123+23.32412)))
                 ptr.setBrush(clr)
                 for x in xx:
-                    ptr.drawEllipse(QRect(x-R, y-R, 2*R, 2*R)
+                    ptr.drawEllipse(QRect(x-R, y-R, 2*R, 2*R))
 
 
 class PyPhy:
@@ -363,8 +363,10 @@ class PyPhy:
 
     def setData(self, mem, fs_Hz, chlist=None):
         '''SETDATA - Specify data to display
+        
         SETDATA(mem, fs_Hz) specifies the data (shaped TxC) to display and
         the sample rate for the data.
+        
         Optional argument CHLIST must be a list or dict with channel numbers.
         Each value in CHLIST must be a dict with channel info as contained
         in OpenEphys's metadata. The only key required here is CHANNEL_NAME.
@@ -373,14 +375,17 @@ class PyPhy:
 
     def setStimuli(self, tt_s, labels=None):
         '''SETSTIMULI - Add stimulus markers to the display
+        
         SETSTIMULI(tt) where TT is a vector of times in seconds, adds
         stimulus markers to the display.
+        
         SETSTIMULI(tt, labels) where LABELS is a list of labels that
         has the same length as TT also provides labels for the vis_stimuli.'''
         self.win.setStimuli(tt_s, labels)
 
     def setSpikes(self, spkmap):
         '''SETSPIKES - Add spike markers to the display
+        
         SETSPIKES(spkmap), where SPKMAP is a list of (c, tt) pairs
         containing electrode channels (C) and associated vectors of
         spike times (TT), adds graphical marks for those spikes.'''

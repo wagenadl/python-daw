@@ -42,31 +42,33 @@ def z2rgb(zz):
     rgb[rgb<0]=0
     return rgb
 
-qp.figure('s2', 8, 4)
-qp.subplot(1,2,0)
-xx = np.arange(-1,1.0001, .002)
-X = len(xx)
-xx = xx.reshape(1,X)
-yy = xx.T
-zz = xx + 1j*yy
-zz[np.abs(zz)>1] = 1e-9
-qp.image(z2rgb(zz), xx=xx, yy=-yy)
-phi = np.arange(0,2*np.pi+.0001,.001)
-qp.pen('k', 0, alpha=.2)
-for r in [.3, .4]:
-    qp.plot(r*np.cos(phi), r*np.sin(phi))
-qp.marker('+',1)
-qp.mark(0,0)
-qp.shrink(1,1)
 
-qp.subplot(1,2,1)
-xx = np.arange(0,3*np.pi, .01)
-X = len(xx)
-yy = np.arange(0,1,.005)
-Y = len(yy)
-zz = yy.reshape(Y,1)*np.exp(1j*xx.reshape(1,X))
-qp.image(z2rgb(zz), xx=180*xx/np.pi, yy=-yy)
-qp.pen('k', 0, alpha=.2)
-for r in [.3, .4]:
-    qp.plot(xx*180/np.pi, 0*xx-r)
-qp.shrink(1)
+if __name__ == "__main__":
+    qp.figure('s2', 8, 4)
+    qp.subplot(1,2,0)
+    xx = np.arange(-1,1.0001, .002)
+    X = len(xx)
+    xx = xx.reshape(1,X)
+    yy = xx.T
+    zz = xx + 1j*yy
+    zz[np.abs(zz)>1] = 1e-9
+    qp.image(z2rgb(zz), xx=xx, yy=-yy)
+    phi = np.arange(0,2*np.pi+.0001,.001)
+    qp.pen('k', 0, alpha=.2)
+    for r in [.3, .4]:
+        qp.plot(r*np.cos(phi), r*np.sin(phi))
+    qp.marker('+',1)
+    qp.mark(0,0)
+    qp.shrink(1,1)
+
+    qp.subplot(1,2,1)
+    xx = np.arange(0,3*np.pi, .01)
+    X = len(xx)
+    yy = np.arange(0,1,.005)
+    Y = len(yy)
+    zz = yy.reshape(Y,1)*np.exp(1j*xx.reshape(1,X))
+    qp.image(z2rgb(zz), xx=180*xx/np.pi, yy=-yy)
+    qp.pen('k', 0, alpha=.2)
+    for r in [.3, .4]:
+        qp.plot(xx*180/np.pi, 0*xx-r)
+    qp.shrink(1)
