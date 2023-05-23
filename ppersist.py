@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import numpy as np
+import pandas as pd
 import pickle
 import inspect
 import re
@@ -23,7 +24,8 @@ def cansave(v):
     if t==str:
         return True
     if t==int or t==np.int32 or t==np.int64 \
-       or t==float or t==np.float64 or t==complex:
+       or t==float or t==np.float64 or t==complex \
+       or t==np.bool_ or t==np.intc:
         return True
     if t==dict:
         for k,v1 in v.items():
@@ -35,6 +37,12 @@ def cansave(v):
             if not cansave(v1):
                 return False
         return True
+    if t == pd.DataFrame or t == pd.Series:
+        for v1 in v:
+            if not cansave(v1):
+                return False
+        return True
+
     print(f'Cannot save {t}')
     return False
 
@@ -133,7 +141,7 @@ def load(fn):
     you can also say: v1, v2, ..., vn = LOAD(fn) to immediately unpack 
     the tuple.
     Simply calling LOAD(fn) without assignment to variables directly
-    loads the variables saved by SAVE(fn, ...) into the callers namespace. 
+    loads the variables saved by SAVE(fn, ...) into the caller's namespace.
     This is a super ugly Matlab-style hack, but really convenient.
     LOADDICT and LOADTUPLE are cleaner alternatives'''
     with open(fn, 'rb') as fd:

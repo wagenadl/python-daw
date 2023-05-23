@@ -3,6 +3,7 @@
 import numpy as np
 import os.path
 
+
 def cell(dims):
     '''CELL - Construct a Matlab-style cell array
     Cell arrays are N-dimensional tensor-like structures with arbitrary 
@@ -10,11 +11,13 @@ def cell(dims):
     arrays with "object" dtype. Initial content is None in each cell.'''
     return np.ndarray(dims, object)
 
+
 def iscell(obj):
     '''ISCELL - Test whether object is a cell array
     x = ISCELL(obj) returns True if OBJ is a cell array, i.e., something
     created by the CELL function.'''
-    return type(obj)==np.ndarray and obj.dtype==object
+    return type(obj) == np.ndarray and obj.dtype == object
+
 
 class Struct:
     '''STRUCT - A Matlab-style struct or struct array
@@ -40,7 +43,7 @@ class Struct:
       print(s.foo)       # ['one' 'two' 'three']
       print(s[:-1])      # a struct array with two members
       print(s[:-1].bar)  # [1 list([5,7])]'''
-    
+
     def __init__(self, **args):
         '''Constructor - Like Matlab/Octave's STRUCT constructor
         s = STRUCT(field1=values1, field2=value2, ...) constructs a new
@@ -75,14 +78,18 @@ class Struct:
             else:
                 for n in range(N):
                     self._contents_.flat[n][k] = v
+
     def keys(self):
         '''KEYS - Field names as a DICT_KEYS object'''
         return self._contents_.flat[0].keys()
+
     def fieldnames(self):
         '''FIELDNAMES - Field names as a list'''
         return [k for k in self.keys()]
+
     def shape(self):
         return self._contents_.shape
+
     def ndim(self):
         return self._contents_.ndim
 
@@ -94,9 +101,9 @@ class Struct:
         self.__setitem__(key, value)
 
     def __getitem__(self, key):
-        if type(key)==str:
+        if type(key) == str:
             # String key gets field or cell array of fields
-            if self._contents_.ndim==0:
+            if self._contents_.ndim == 0:
                 return self._contents_.flat[0][key]
             else:
                 res = cell(self._contents_.shape)
@@ -106,36 +113,36 @@ class Struct:
                 return res
         else:
             # Proper indexing
-            if self._contents_.ndim==0:
+            if self._contents_.ndim == 0:
                 if np.issubdtype(type(key), np.integer):
-                    if key!=0:
+                    if key != 0:
                         raise KeyError(key)
                 elif np.issubdtype(type(key), np.floating):
                     raise KeyError(key)
                 else:
-                    if any(key!=0):
-                        raise KeyError(key)                        
+                    if any(key != 0):
+                        raise KeyError(key)
                 return self
             else:
                 ct = self._contents_[key]
                 res = Struct()
-                if type(ct)==dict:
+                if type(ct) == dict:
                     res._contents_.flat[0] = ct
                 else:
-                    res.__dict__['_contents_'] = ct # avoids calling setattr
+                    res.__dict__['_contents_'] = ct  # avoids calling setattr
                 return res
-                    
+
         return key
-    
+
     def __setitem__(self, key, value):
-        if type(key)==str:
+        if type(key) == str:
             # String key sets field or cell array of fields
-            if self._contents_.ndim==0:
+            if self._contents_.ndim == 0:
                 self._contents_.flat[0][key] = value
             else:
                 N = len(self._contents_.flat)
-                if type(value)==np.ndarray and value.dtype==object:
-                    if value.shape==self._contents_.shape:
+                if type(value) == np.ndarray and value.dtype == object:
+                    if value.shape == self._contents_.shape:
                         for n in range(N):
                             self._contents_.flat[n][key] = value.flat[n]
                     else:
@@ -143,19 +150,19 @@ class Struct:
                 else:
                     for n in range(N):
                         self._contents_.flat[n][key] = value
-                    
+
         else:
             # Proper indexing
             # Value must be a struct with fields that match ours.
             # or it may be a dict with fields that match ours
-            if type(value)==Struct:
-                if value.fieldnames()==self.fieldnames():
+            if type(value) == Struct:
+                if value.fieldnames() == self.fieldnames():
                     self._contents_[key] = value
                 else:
                     raise ValueError('Mismatching fieldnames')
 
     def __repr__(self):
-        if self._contents_.ndim==0:
+        if self._contents_.ndim == 0:
             return self._contents_.flat[0].__repr__()
         else:
             dims = 'x'.join([f'{x}' for x in self._contents_.shape])
@@ -172,15 +179,15 @@ class Struct:
         if the input is a scalar.'''
         if deep:
             def deStruct(x):
-                if type(x)==type(self):
+                if type(x) == type(self):
                     return x.asdict(deep=deep,
                                     keepscalarasarray=keepscalarasarray)
-                elif type(x)==np.ndarray and x.dtype==np.object:
-                   N = len(x.flat)
-                   y = np.ndarray(x.shape, np.object)
-                   for n in range(N):
-                       y.flat[n] = deStruct(x.flat[n])
-                   return y
+                elif type(x) == np.ndarray and x.dtype == np.object:
+                    N = len(x.flat)
+                    y = np.ndarray(x.shape, np.object)
+                    for n in range(N):
+                        y.flat[n] = deStruct(x.flat[n])
+                    return y
                 else:
                     return x
         else:
@@ -190,38 +197,39 @@ class Struct:
         res = np.ndarray(self.shape(), np.object)
         N = len(self._contents_.flat)
         for n in range(N):
-            res.flat[n] = { k: deStruct(v)
-                            for k,v in self._contents_.flat[n].items()
-                            if k!='__class__' }
-        if N==1 and not keepscalarasarray:
+            res.flat[n] = {k: deStruct(v)
+                           for k, v in self._contents_.flat[n].items()
+                           if k != '__class__'}
+        if N == 1 and not keepscalarasarray:
             res = res.flat[0]
         return res
-                     
 
-        
 
 def _pythonify_matrix(v):
-    if v.ndim==2:
+    if v.ndim == 2:
         # Convert 1x1 to scalar and 1xN, Nx1 to vector
-        n,m = v.shape
-        if n==1 and m==1:
-            return v[0,0]
-        elif n==1 or m==1:
+        n, m = v.shape
+        if n == 1 and m == 1:
+            return v[0, 0]
+        elif n == 1 or m == 1:
             return v.flatten()
     return v
 
+
 def _pythonify_string(v):
-    if len(v)==1:
+    if len(v) == 1:
         return str(v[0])
     else:
         return [str(x) for x in v]
+
 
 def _pythonify_cell(v):
     cc = cell(v.shape)
     N = len(v.flat)
     for n in range(N):
         cc.flat[n] = _pythonify(v.flat[n])
-    return _pythonify_matrix(cc) # Drop useless dimensions
+    return _pythonify_matrix(cc)  # Drop useless dimensions
+
 
 def _pythonify_struct(v):
     dct = {}
@@ -230,13 +238,13 @@ def _pythonify_struct(v):
     for k in range(K):
         f = v.dtype.names[k]
         shp = v.shape
-        if len(shp)==2:
-            n,m = shp
-            if n==1 and m==1:
+        if len(shp) == 2:
+            n, m = shp
+            if n == 1 and m == 1:
                 shp = ()
-            elif n==1:
+            elif n == 1:
                 shp = (m)
-            elif m==1:
+            elif m == 1:
                 shp = (n)
             cc = cell(shp)
         for n in range(N):
@@ -244,17 +252,21 @@ def _pythonify_struct(v):
         dct[f] = cc
     ss = Struct(**dct)
     return ss
-    
+
+
 def _pythonify(v):
-    if v.dtype==object:
-        return _pythonify_cell(v)
-    elif v.dtype.names is not None:
-        return _pythonify_struct(v)
-    elif v.dtype.kind=='U':
-        return _pythonify_string(v)
+    if type(v)==np.ndarray:
+        if v.dtype == object:
+            return _pythonify_cell(v)
+        elif v.dtype.names is not None:
+            return _pythonify_struct(v)
+        elif v.dtype.kind == 'U':
+            return _pythonify_string(v)
+        else:
+            return _pythonify_matrix(v)
     else:
-        return _pythonify_matrix(v)
-    
+        return v
+
 def loadmat(ifn):
     '''LOAD - Load a .mat file
     x = LOAD(ifn) loads the variables in the .mat file as a STRUCT.
@@ -270,19 +282,20 @@ def loadmat(ifn):
         res[k] = _pythonify(v)
     return res
 
+
 def save(ofn, *args):
     '''SAVE - Save a .mat file
     SAVE(ofn, var1, var2, ...) saves the named variables into a .mat file.
-    CAUTION: SAVE uses the INSPECT module to determine how it was called. 
+    CAUTION: SAVE uses the INSPECT module to determine how it was called.
     That means that VARi must all be simple variables and that OFN, if given
-    as a direct string, may not contain commas. Variable names must start 
+    as a direct string, may not contain commas. Variable names must start
     with a letter and may only contain letters, numbers, and underscore.
     OK examples:
       x = 3
       y = 'Hello'
       z = np.eye(3)
       save('/tmp/test.mat', x, y, z)
-      fn = '/tmp/test,1.mat' 
+      fn = '/tmp/test,1.mat'
       save(fn, x, y, z) # The fact that FN contains a comma is no problem
     Bad examples:
       save('/tmp/test,1.mat', x, y) # Comma is not allowed
@@ -306,11 +319,12 @@ def save(ofn, *args):
             raise ValueError('Bad variable name: ' + names[k])
     dct = {}
     for k in range(N):
-        if type(args[k])==Struct:
+        if type(args[k]) == Struct:
             dct[names[k]] = args[k]._contents_
         else:
             dct[names[k]] = args[k]
     scipy.io.savemat(ofn, dct, do_compression=True)
+
 
 def load(ifn):
     '''LOAD - Load a .mat file
@@ -320,7 +334,7 @@ def load(ifn):
     IFN may not contain double quotes (").'''
     import tempfile
     import os
-    with tempfile.TemporaryDirectory() as tmpdir:    
+    with tempfile.TemporaryDirectory() as tmpdir:
         mfile = tmpdir + '/convert.m'
         matfile = tmpdir + '/converted.mat'
         with open(mfile, 'w') as fh:
@@ -333,12 +347,13 @@ def load(ifn):
         os.system(f'/usr/bin/octave {opts} {mfile}')
         res = loadmat(matfile)
     return res
-        
-    
+
+
 if __name__ == '__main__':
     from drepr import d
+
     s = Struct(foo=1)
-    c = cell((3))    
+    c = cell((3))
     c[0] = 'x'
     c[1] = 'y'
     c[2] = 'z'
@@ -359,5 +374,5 @@ if __name__ == '__main__':
     t = mat.t
     x = mat.x
     xx = mat.xx
-    save('/tmp/test.mat', c,cc,f,i16,u32,txt,txts,s,t,x,xx)
-    
+    save('/tmp/test.mat', c, cc, f, i16, u32, txt, txts, s, t, x, xx)
+
