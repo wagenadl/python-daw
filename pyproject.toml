@@ -13,3 +13,6 @@ version = "23.7.18"
 dependencies = [
     "numpy"
 ]
+packages = [
+    { include = "daw" },
+]
