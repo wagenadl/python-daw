@@ -1,5 +1,5 @@
 SConscript([
-  'daw/findx/SConscript',
-  'daw/peakx/SConscript',
+  'src/daw/findx/SConscript',
+  'src/daw/peakx/SConscript',
   ])
   

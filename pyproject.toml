@@ -13,6 +13,3 @@ version = "23.7.18"
 dependencies = [
     "numpy"
 ]
-
-[tool.setuptools]
-py-modules = ["daw"]
