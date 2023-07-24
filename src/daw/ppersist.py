@@ -108,68 +108,114 @@ def savedict(fn, dct):
             raise ValueError('Cannot save variable: ' + k)
 
     with open(fn, 'wb') as fd:  
-        pickle.dump(dct, fd, pickle.HIGHEST_PROTOCOL)    
+        pickle.dump(dct, fd, pickle.HIGHEST_PROTOCOL)
 
-def loaddict(fn):
+
+_allowed = [
+    ("numpy.core.numeric", "_frombuffer"),
+    ("numpy", "dtype"),
+    ("pandas.core.frame", "DataFrame"),
+    ("pandas.core.internals.managers", "BlockManager"),
+    ("functools", "partial"),
+    ("pandas.core.internals.blocks", "new_block"),
+    ("builtins", "slice"),
+    ("pandas.core.indexes.base", "_new_Index"),
+    ("pandas.core.indexes.base", "Index"),
+    ("numpy.core.multiarray", "_reconstruct"),
+    ("numpy", "ndarray"),
+    ("pandas.core.indexes.range", "RangeIndex"),
+    ("builtins", "complex"),
+    ("builtins", "set"),
+    ("builtins", "frozenset"),
+    ("builtins", "range"),
+    ("builtins", "slice"),
+]
+
+class SafeLoader(pickle.Unpickler):
+    def find_class(self, module, name):
+        if (module, name) in _allowed:
+            return super().find_class(module, name)
+        else:
+            raise pickle.UnpicklingError(f"Not allowed “{module}”: “{name}”")
+
+        
+class UnsafeLoader(pickle.Unpickler):
+    def find_class(self, module, name):
+        if (module, name) not in _allowed:
+            print(f"Caution: Loading “{module}.{name}” from pickle.")
+        return super().find_class(module, name)
+
+    
+def _load(fn, trusted=False):
+    with open(fn, 'rb') as fd:
+        if trusted:
+            return UnsafeLoader(fd).load()
+        else:
+            return SafeLoader(fd).load()
+    
+
+def loaddict(fn, trusted=False):
     '''LOADDICT - Reload data saved with SAVE or SAVEDICT
     x = LOADDICT(fn) loads the file named FN, which should have been created
     by SAVE. The result is a dictionary with the original variable names
     as keys.'''
-    with open(fn, 'rb') as fd:
-        dct = pickle.load(fd)
+    dct = _load(fn, trusted)
     del dct['__names__']
     return dct
 
-def loadtuple(fn, typename='PPERSIST'):
-    '''LOADTUPLE - Reload data saved with SAVE or SAVEDICT
-    x = LOADTUPLE(fn) loads the file named FN which should have been created
+def load(fn, trusted=False, typename='PPersist'):
+    '''LOAD - Reload data saved with SAVE or SAVEDICT
+    x = LOAD(fn) loads the file named FN which should have been created
     by SAVE. The result is a named tuple with the original variable names
-    as keys.'''
-    with open(fn, 'rb') as fd:
-        dct = pickle.load(fd)
+    as keys.
+    v1, v2, ..., vn = LOAD(fn) immediately unpacks the tuple.
+    '''
+    dct = _load(fn, trusted)
     names = dct['__names__']
-    tpl = collections.namedtuple(typename, names)
+    TPL = collections.namedtuple(typename, names)
     lst = []
     for n in names:
         lst.append(dct[n])
-    return tpl(*lst)
+    return TPL(*lst)
 
-def load(fn):
-    '''LOAD - Reload data saved with SAVE
-    vv = LOAD(fn) loads the file named FN, which should have been created
-    by SAVE(fn, v1, v2, ..., vn) and returns a named tuple. Of course
-    you can also say: v1, v2, ..., vn = LOAD(fn) to immediately unpack 
-    the tuple.
-    Simply calling LOAD(fn) without assignment to variables directly
-    loads the variables saved by SAVE(fn, ...) into the caller's namespace.
+'''Better (?) alternative to namedtuple:
+
+     class Foo(tuple):
+         def __new__(cls, *args):
+             return super(Foo, cls).__new__(cls, args)
+         def __init__(self, *args):
+             self._names = names
+         def __getattr__(self, n):
+             if n in self._names:
+                 return self[self._names.index(n)]
+             else:
+                 raise AttributeError(f"Tuple has no attribute “{n}”")
+         def __getitem__(self, n):
+             if type(n)==str:
+                 return self.__getattr__(n)
+             else:
+                 return super().__getitem__(n)
+         def keys(self):
+             return self._names
+         def __repr__(self):
+             return {n: self[k] for k,n in enumerate(self._names)}.__repr__()
+
+   This can be unpacked like a tuple, indexed using f[0], but also using 
+   f["a"] or f.a if "a" is in names.
+    '''
+
+
+def mload(fn, trusted=False):
+    '''MLOAD - Reload data saved with SAVE 
+    MLOAD(fn)  directly loads the variables saved by SAVE(fn, ...) 
+    into the caller's namespace.
     This is a super ugly Matlab-style hack, but really convenient.
-    LOADDICT and LOADTUPLE are cleaner alternatives'''
-    with open(fn, 'rb') as fd:
-        dct = pickle.load(fd)
+    LOADDICT and LOAD are cleaner alternatives'''
+    dct = _load(fn, trusted)
     names = dct['__names__']
 
     frame = inspect.currentframe().f_back
-    string = inspect.getframeinfo(frame).code_context[0]
-    if '=' in string:
-        # Return a tuple
-        bits = fn.split('/')
-        leaf = bits[-1]
-        bits = fn.split('.')
-        base = bits[0]
-        typename = ''
-        for b in base:
-            if (b>='A' and b<='Z') or (b>='a' and b<='z') \
-               or (b>='0' and b<='9' and typename!=''):
-                typename += b
-        if typename=='':
-            typename='anon'
-        ResType = collections.namedtuple(typename, names)
-        res = []
-        for k in names:
-            res.append(dct[k])
-        return ResType._make(res)
-    else:
-        # Else inject directly into calling frame
-        for k in names:
-            frame.f_locals[k] = dct[k]
-        print(f'Loaded the following: {", ".join(names)}.')
+    # inject directly into calling frame
+    for k in names:
+        frame.f_locals[k] = dct[k]
+    print(f'Loaded the following: {", ".join(names)}.')
