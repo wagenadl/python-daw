@@ -176,7 +176,7 @@ def loaddict(fn, trusted=False):
     del dct['__names__']
     return dct
 
-def load(fn, trusted=False, typename='PPersist'):
+def load(fn, trusted=False):
     '''LOAD - Reload data saved with SAVE or SAVEDICT
     x = LOAD(fn) loads the file named FN which should have been created
     by SAVE. The result is a named tuple with the original variable names
@@ -185,42 +185,26 @@ def load(fn, trusted=False, typename='PPersist'):
     '''
     dct = _load(fn, trusted)
     names = dct['__names__']
-    class Tuple(collections.namedtuple(typename, names)):
+    class Tuple(collections.namedtuple('Tuple', names)):
+        revmap = { name: num for num, name in enumerate(names) }
         def __getitem__(self, k):
-            if k in self._fields:
-                return self.__getattr__(k)
+            if type(k)==str:
+                if k in Tuple.revmap:
+                    k = Tuple.revmap[k]
+                else:
+                    raise KeyError(k)
             else:
                 return super().__getitem__(k)
+        def __str__(self):
+            return "Tuple with fields:\n  " + "\n  ".join(Tuple.revmap.keys())
+        def __repr__(self):
+            return "<Tuple(" + ", ".join(["'"+n+"'" for n in Tuple.revmap.keys()]) + ")>"
+        def keys(self):
+            return Tuple.revmap.keys()
     lst = []
     for n in names:
         lst.append(dct[n])
     return Tuple(*lst)
-
-'''Better (?) alternative to namedtuple:
-
-     class Foo(tuple):
-         def __new__(cls, *args):
-             return super(Foo, cls).__new__(cls, args)
-         def __init__(self, *args):
-             self._names = names
-         def __getattr__(self, n):
-             if n in self._names:
-                 return self[self._names.index(n)]
-             else:
-                 raise AttributeError(f"Tuple has no attribute “{n}”")
-         def __getitem__(self, n):
-             if type(n)==str:
-                 return self.__getattr__(n)
-             else:
-                 return super().__getitem__(n)
-         def keys(self):
-             return self._names
-         def __repr__(self):
-             return {n: self[k] for k,n in enumerate(self._names)}.__repr__()
-
-   This can be unpacked like a tuple, indexed using f[0], but also using 
-   f["a"] or f.a if "a" is in names.
-    '''
 
 
 def mload(fn, trusted=False):
