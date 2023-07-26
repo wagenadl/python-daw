@@ -170,7 +170,12 @@ def loaddict(fn, trusted=False):
     '''LOADDICT - Reload data saved with SAVE or SAVEDICT
     x = LOADDICT(fn) loads the file named FN, which should have been created
     by SAVE. The result is a dictionary with the original variable names
-    as keys.'''
+    as keys.
+    Optional parameter TRUSTED may be used to turn off safety checks
+    in the underlying pickle loading. With the default TRUSTED=False, 
+    we only allow loading of very specific object types, even when nested
+    inside Pandas dataframes or numpy arrays. TRUSTED=True enables loading
+    any pickle. Only do this for files that you actually trust. '''
     # Pass unsafe=True only for debugging on trusted files!
     dct = _load(fn, trusted)
     del dct['__names__']
@@ -179,9 +184,14 @@ def loaddict(fn, trusted=False):
 def load(fn, trusted=False):
     '''LOAD - Reload data saved with SAVE or SAVEDICT
     x = LOAD(fn) loads the file named FN which should have been created
-    by SAVE. The result is a named tuple with the original variable names
-    as keys.
+    by SAVE or SAVEDICT. 
+    The result is a named tuple with the original variable names as keys.
     v1, v2, ..., vn = LOAD(fn) immediately unpacks the tuple.
+    Optional parameter TRUSTED may be used to turn off safety checks
+    in the underlying pickle loading. With the default TRUSTED=False, 
+    we only allow loading of very specific object types, even when nested
+    inside Pandas dataframes or numpy arrays. TRUSTED=True enables loading
+    any pickle. Only do this for files that you actually trust. 
     '''
     dct = _load(fn, trusted)
     names = dct['__names__']
@@ -211,8 +221,14 @@ def mload(fn, trusted=False):
     '''MLOAD - Reload data saved with SAVE 
     MLOAD(fn)  directly loads the variables saved by SAVE(fn, ...) 
     into the caller's namespace.
-    This is a super ugly Matlab-style hack, but really convenient.
-    LOAD and LOADDICT are cleaner alternatives'''
+    This is a super ugly Matlab-style hack, but convenient for quick hacking.
+    LOAD and LOADDICT are cleaner alternatives
+    Optional parameter TRUSTED may be used to turn off safety checks
+    in the underlying pickle loading. With the default TRUSTED=False, 
+    we only allow loading of very specific object types, even when nested
+    inside Pandas dataframes or numpy arrays. TRUSTED=True enables loading
+    any pickle. Only do this for files that you actually trust. 
+'''
     dct = _load(fn, trusted)
     names = dct['__names__']
 
