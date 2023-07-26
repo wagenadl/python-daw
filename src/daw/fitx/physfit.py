@@ -195,7 +195,10 @@ def physfit(f, x, y, sy=None, sx=None, p0=None, sxy=None):
 
     # Now foo is the function to be fitted, p0 are initial values
 
-    df = len(p0)
+    if len(p0.shape):
+        df = len(p0)
+    else:
+        df = 1
     N = len(x)
     fits = []
     

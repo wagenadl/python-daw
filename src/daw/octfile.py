@@ -363,4 +363,3 @@ if __name__ == '__main__':
     x = mat.x
     xx = mat.xx
     save('/tmp/test.mat', c,cc,f,i16,u32,txt,txts,s,t,x,xx)
-    

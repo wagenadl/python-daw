@@ -2,3 +2,7 @@
 *.os
 lib*.so
 __pycache__
+doxy/docs
+dist
+daw.egg-info
+

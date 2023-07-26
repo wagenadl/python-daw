@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daw"
+authors = [
+    {name = "Daniel Wagenaar", email = "daw@caltech.edu"},
+]
+description = "Random collection of python libraries"
+readme = "README.md"
+version = "23.7.18"
+dependencies = [
+    "numpy"
+]

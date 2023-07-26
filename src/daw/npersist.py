@@ -4,6 +4,7 @@ import numpy as np
 import h5py
 import inspect
 import re
+from collections import namedtuple
 
 def cansave(v):
     '''CANSAVE - Can a given object be saved by NPERSIST?
@@ -14,6 +15,8 @@ def cansave(v):
       - Simple numbers (int, float, complex)
       - Lists, tuples, and dicts containing those (even hierarchically).'''
     t = type(v)
+    if v is None:
+        return True
     if t==np.ndarray:
         return True
     if t==str:
@@ -44,6 +47,7 @@ def saveto(fd, name, value):
     m = cre.search(typstr)
     if m:
         typstr = m.group(1)
+    print("Creating", name, typstr)
     if typ==tuple or typ==list:
         subtyp = None
         simple = True
@@ -69,6 +73,8 @@ def saveto(fd, name, value):
         ds = fd.create_group(name)
         for k, v in value.items():
             saveto(ds, str(k), v)
+    elif value is None:
+        ds = fd.create_dataset(name, data=[])
     else:
         ds = fd.create_dataset(name, data=value)
     ds.attrs['origtype'] = typstr
@@ -143,6 +149,9 @@ def savedict(fn, dct):
 def loadfrom(fd, k):
     ds = fd[k]
     origtyp = ds.attrs['origtype']
+    print("origtyp", origtyp)
+    if origtyp=='NoneType':
+        return None
     if type(ds) == h5py.Dataset:
         v = np.array(ds)
         if origtyp=='list' or origtyp=='tuple':
@@ -166,7 +175,9 @@ def loadfrom(fd, k):
             else:
                 return v
     else:
-        if origtyp=='list' or origtyp=='tuple':
+        if origtyp=='None':
+            return None
+        elif origtyp=='list' or origtyp=='tuple':
             N = len(ds.keys())
             lst = []
             for n in range(N):
@@ -203,5 +214,7 @@ def load(fn):
         res = []
         for k in kk:
             res.append(loadfrom(fd, k))
-        return tuple(res)
+        ResType = namedtuple("npersist", kk)
+        return ResType._make(res)
+        #return tuple(res)
 
