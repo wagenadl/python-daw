@@ -1,5 +1,6 @@
-from .ccore import *
+from .findx_numba import *
 from .other import *
+# from .ccore import *
 
 # We implement all the findfirst_xx and findlast_xx functions
 # binsearch is subsumed by numpy.searchsorted
