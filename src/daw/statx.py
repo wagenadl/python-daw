@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
 import numpy as np
+from numba import njit
+
 from . import basicx
 # These are the "statx" functions from my octave library
 
@@ -194,4 +196,40 @@ def games_howellHSD(groupdata, alpha=0.05):
             pp[g1,g2] = pp[g2,g1] = 1 - studentized_range.cdf(qq[g1, g2],G,df)
     letters = tukeyLetters(pp, means, alpha)
     return pp, letters
-    
+
+
+@njit
+def _xcorg_int(xx: np.ndarray, yy: np.ndarray, L: int) -> [int]:
+    xc = np.zeros(L, dtype=np.int64)
+    nx = len(xx)
+    ny = len(yy)
+    ix = 0
+    iy = 0
+    while ix<nx and iy<ny:
+        tx = xx[ix]
+        ix += 1
+        while iy < ny and yy[iy] < tx:
+            iy += 1
+            
+        jy = iy
+        while jy < ny:
+            dt = int(yy[jy] - tx)
+            if dt<L:
+                xc[dt] += 1
+                jy += 1
+            else:
+                break
+    return xc
+
+
+def xcorg(xx: np.ndarray, yy: np.ndarray, dt, N: int):
+    '''XCORG - Calculate crosscorrelogram between point processes
+    cc = XCORG(xx, yy, dt, N) calculates the crosscorrelogram between
+    the time series XX and YY at lags (-N*dt, ..., -dt, 0, dt, ..., +N*dt).
+    If an event in XX at time t makes it more likely that an event in YY
+    occurs at time t + k*dt, then cc[N+k] will be positive.
+'''
+    if xx.dtype==np.int64 and yy.dtype==np.int64 and type(dt)==int:
+        return _xcorg_int(xx//dt - N, yy//dt, 2*N+1)
+    else:
+        return _xcorg_int(xx/dt - N - 0.5, yy/dt, 2*N+1)
